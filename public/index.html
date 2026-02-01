@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pad Scale Finder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-dark: #0f0f0f;
+            --container-bg: #1a1a1a;
+            --pad-bg: #222222;
+            --accent-red: #ff3b3b;
+            --accent-green: #00ff00;
+            --border-color: #333333;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #ffffff;
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .mpc-container {
+            background-color: var(--container-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+            width: 95%;
+            max-width: 900px;
+            height: 96vh;
+            max-height: 1100px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+
+        .status-area {
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .label-small {
+            font-size: 10px;
+            color: #666;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .status-text {
+            color: var(--accent-red);
+            font-weight: bold;
+            font-style: italic;
+            font-size: 14px;
+        }
+
+        .bpm-display {
+            text-align: right;
+        }
+
+        .bpm-value {
+            color: var(--accent-green);
+            font-size: 28px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .view-panel {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .pad-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            flex-grow: 1;
+            margin-bottom: 24px;
+        }
+
+        .pad {
+            background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+            border: 1px solid #444;
+            border-radius: 6px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-shadow: 4px 4px 10px rgba(0,0,0,0.4);
+            user-select: none;
+        }
+
+        .pad-id {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            font-size: 10px;
+            color: #555;
+        }
+
+        .pad-note {
+            font-size: 24px;
+            font-weight: 700;
+            color: #eee;
+        }
+
+        .pad.active {
+            border: 2px solid var(--accent-red);
+            box-shadow: 0 0 15px rgba(255, 59, 59, 0.4), inset 0 0 8px rgba(255, 59, 59, 0.2);
+        }
+
+        .pad.playing {
+            background: #ff3b3b;
+            color: white;
+            transform: scale(0.95);
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .ai-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .ai-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #4f46e5, #9333ea);
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .ai-btn:hover { opacity: 0.9; }
+        .ai-btn:disabled { background: #333; cursor: not-allowed; }
+
+        select, input[type="number"], input[type="text"] {
+            background-color: #111;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100%;
+            outline: none;
+        }
+
+        .input-with-label {
+            display: flex;
+            align-items: center;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 0 12px;
+        }
+
+        .input-label {
+            font-size: 10px;
+            color: #666;
+            margin-right: 8px;
+        }
+
+        input[type="range"] {
+            accent-color: var(--accent-red);
+            flex-grow: 1;
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .btn {
+            background-color: #333;
+            color: #fff;
+            padding: 14px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: 1px solid #444;
+        }
+
+        .btn:hover { background-color: #444; }
+        .btn-red.active { background-color: var(--accent-red); color: white; border-color: #ff6666; }
+
+        .nav-tabs {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            margin-top: 24px;
+            padding: 4px;
+            background-color: #000;
+            border-radius: 8px;
+        }
+
+        .tab {
+            padding: 12px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #666;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .tab.active {
+            background-color: #333;
+            color: #fff;
+        }
+
+        #sequencer-container {
+            flex-grow: 1;
+            background-color: #0a0a0a;
+            border: 1px solid #222;
+            overflow-y: auto;
+            border-radius: 4px;
+        }
+
+        .seq-row {
+            display: flex;
+            height: 40px;
+            border-bottom: 1px solid #1a1a1a;
+        }
+
+        .seq-key {
+            width: 80px;
+            background-color: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--accent-green);
+            border-right: 2px solid #222;
+            flex-shrink: 0;
+        }
+
+        .seq-key.root { background-color: #1a2a1a; }
+
+        .seq-grid {
+            display: flex;
+            flex-grow: 1;
+        }
+
+        .seq-cell {
+            flex: 1;
+            border-right: 1px solid #1a1a1a;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .seq-cell.active { 
+            background-color: var(--accent-green) !important; 
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.4), 0 0 3px rgba(0, 255, 0, 0.6);
+            z-index: 10;
+        }
+        
+        .seq-cell.current { 
+            background-color: rgba(255, 255, 255, 0.4) !important; 
+            box-shadow: inset 0 0 0 1px white;
+        }
+        
+        .seq-cell.active.current {
+            background-color: #aaffaa !important;
+            box-shadow: 0 0 5px white;
+        }
+        
+        .seq-cell.measure-alt { background-color: #252525; }
+        .seq-cell:not(.measure-alt) { background-color: #1a1a1a; }
+        .seq-cell:hover { opacity: 0.7; }
+
+        .hidden { display: none !important; }
+
+        #ai-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="mpc-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="status-area">
+                <div class="flex items-center gap-4 mb-1">
+                    <span class="label-small">NAVIGATOR</span>
+                    <button id="sound-toggle" class="bg-[#333] px-3 py-1 rounded text-[10px] font-bold flex items-center gap-1">
+                        <span id="sound-icon">🔈</span> SOUND OFF
+                    </button>
+                </div>
+                <div id="status-label" class="status-text uppercase tracking-widest">STOPPED</div>
+            </div>
+            <div class="bpm-display">
+                <div id="bpm-val" class="bpm-value">120 BPM</div>
+                <div class="label-small">STEP SEQUENCER (1 Bar = 4 Steps)</div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div id="view-pads" class="view-panel">
+            <div id="pad-grid" class="pad-grid"></div>
+        </div>
+
+        <div id="view-sequencer" class="view-panel hidden">
+            <div id="sequencer-container"></div>
+            <div class="mt-2 flex justify-end">
+                <button id="clear-seq" class="text-[10px] text-gray-500 hover:text-white uppercase font-bold">Clear All Steps</button>
+            </div>
+        </div>
+
+        <div id="view-settings" class="view-panel hidden">
+            <div class="bg-black/40 p-6 rounded-lg">
+                <h3 class="label-small mb-4">Device Config</h3>
+                <div class="control-item">
+                    <label class="label-small">Language / 言語設定</label>
+                    <select id="lang-select">
+                        <option value="ja">日本語 (Japanese)</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Integration Area -->
+        <div class="ai-controls">
+            <button id="ai-scale-btn" class="ai-btn">✨ AIスケール提案</button>
+            <button id="ai-prog-btn" class="ai-btn">✨ AI進行生成</button>
+        </div>
+
+        <!-- Lower Controls -->
+        <div class="controls-area">
+            <div class="controls-grid">
+                <select id="root-note">
+                    <option value="C">Root: C</option>
+                    <option value="C#">Root: C# / Db</option>
+                    <option value="D">Root: D</option>
+                    <option value="D#">Root: D# / Eb</option>
+                    <option value="E">Root: E</option>
+                    <option value="F">Root: F</option>
+                    <option value="F#">Root: F# / Gb</option>
+                    <option value="G">Root: G</option>
+                    <option value="G#">Root: G# / Ab</option>
+                    <option value="A">Root: A</option>
+                    <option value="A#">Root: A# / Bb</option>
+                    <option value="B">Root: B</option>
+                </select>
+                <select id="key-type">
+                    <option value="major">Key: Major</option>
+                    <option value="minor">Key: Minor</option>
+                </select>
+            </div>
+
+            <div class="controls-grid">
+                <div class="input-with-label">
+                    <span class="input-label">BPM</span>
+                    <input type="number" id="bpm-input" value="120" min="40" max="240">
+                </div>
+                <div class="input-with-label">
+                    <span class="input-label">VOL</span>
+                    <input type="range" id="volume-fader" min="0" max="1" step="0.01" value="0.5">
+                </div>
+            </div>
+
+            <div class="controls-grid">
+                <select id="mode-selector">
+                    <option value="scale">Mode: Scale</option>
+                    <option value="progression">Mode: Progression</option>
+                </select>
+                <select id="sub-selector"></select>
+            </div>
+
+            <div class="action-buttons">
+                <div id="play-btn" class="btn">PLAY</div>
+                <div id="stop-btn" class="btn">STOP</div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs" id="nav-tabs">
+            <div class="tab active" data-view="pads">PADS</div>
+            <div class="tab" data-view="sequencer">SEQUENCER</div>
+            <div class="tab" data-view="settings">SETTINGS</div>
+        </div>
+    </div>
+
+    <!-- AI Prompt Modal -->
+    <div id="ai-modal" class="hidden">
+        <div class="bg-[#1a1a1a] p-8 rounded-xl border border-[#333] w-96">
+            <h2 id="ai-modal-title" class="text-lg font-bold mb-4 text-purple-400">✨ AI生成</h2>
+            <input type="text" id="ai-input" placeholder="例: 切ない、チル、Lo-fi..." class="mb-4">
+            <div class="flex gap-2">
+                <button id="ai-submit" class="ai-btn flex-grow">生成開始</button>
+                <button id="ai-close" class="btn flex-grow">閉じる</button>
+            </div>
+            <p id="ai-status" class="text-[10px] text-gray-500 mt-4 italic"></p>
+        </div>
+    </div>
+
+    <script>
+        const padGrid = document.getElementById('pad-grid');
+        const rootSelect = document.getElementById('root-note');
+        const keyTypeSelect = document.getElementById('key-type');
+        const modeSelect = document.getElementById('mode-selector');
+        const subSelect = document.getElementById('sub-selector');
+        const bpmInput = document.getElementById('bpm-input');
+        const bpmDisplay = document.getElementById('bpm-val');
+        const playBtn = document.getElementById('play-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const soundToggle = document.getElementById('sound-toggle');
+        const soundIcon = document.getElementById('sound-icon');
+        const volumeFader = document.getElementById('volume-fader');
+        const statusLabel = document.getElementById('status-label');
+        const seqContainer = document.getElementById('sequencer-container');
+        const langSelect = document.getElementById('lang-select');
+        
+        const aiScaleBtn = document.getElementById('ai-scale-btn');
+        const aiProgBtn = document.getElementById('ai-prog-btn');
+        const aiModal = document.getElementById('ai-modal');
+        const aiInput = document.getElementById('ai-input');
+        const aiSubmit = document.getElementById('ai-submit');
+        const aiClose = document.getElementById('ai-close');
+        const aiStatus = document.getElementById('ai-status');
+        const aiModalTitle = document.getElementById('ai-modal-title');
+
+        let currentLang = 'ja';
+
+        const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const padNotes = [];
+        
+        // C3 to D#4 layout (16 pads)
+        for (let i = 0; i < 16; i++) {
+            const totalSemitones = i;
+            const noteIndex = totalSemitones % 12;
+            const octave = 3 + Math.floor(totalSemitones / 12);
+            padNotes.push({ 
+                name: chromaticNotes[noteIndex], 
+                fullName: chromaticNotes[noteIndex] + octave, 
+                octave 
+            });
+        }
+
+        const scales = {
+            major: { name: { ja: 'メジャースケール', en: 'Major Scale' }, intervals: [0, 2, 4, 5, 7, 9, 11] },
+            minor: { name: { ja: 'ナチュラルマイナー', en: 'Natural Minor' }, intervals: [0, 2, 3, 5, 7, 8, 10] }
+        };
+
+        const progressions = {
+            major: {
+                oudou: { name: { ja: '王道進行 (IV-V-IIIm-VIm)', en: 'Royal Road (Pop)' }, labels: ['IV', 'V', 'IIIm', 'VIm'], degrees: [[5,9,0], [7,11,2], [4,7,11], [9,0,4]] },
+                junkun: { name: { ja: '循環進行 (I-VIm-IIm-V)', en: 'Standard Cycle' }, labels: ['I', 'VIm', 'IIm', 'V'], degrees: [[0,4,7], [9,0,4], [2,5,9], [7,11,2]] },
+                canon: { name: { ja: 'カノン進行', en: 'Canon' }, labels: ['I', 'V', 'VIm', 'IIIm', 'IV', 'I', 'IV', 'V'], degrees: [[0,4,7], [7,11,2], [9,0,4], [4,7,11], [5,9,0], [0,4,7], [5,9,0], [7,11,2]] }
+            },
+            minor: {
+                komuro: { name: { ja: '小室進行 (VIm-IV-V-I)', en: 'Komuro Style' }, labels: ['VIm', 'IV', 'V', 'I'], degrees: [[9,0,4], [5,9,0], [7,11,2], [0,4,7]] }, 
+                marusa: { name: { ja: '丸サ進行 (IVM7-III7-VIm7-I7)', en: 'Just The Two of Us' }, labels: ['IVM7', 'III7', 'VIm7', 'I7'], degrees: [[5,9,0,4], [4,8,11,2], [9,0,4,7], [0,4,7,10]] },
+                cliche: { name: { ja: 'クリシェ (VIm-VImM7-VIm7-VI6)', en: 'Line Cliche' }, labels: ['VIm', 'VImM7', 'VIm7', 'VIm6'], degrees: [[9,0,4], [9,0,4,8], [9,0,4,7], [9,0,4,6]] }
+            }
+        };
+
+        let audioCtx, masterGain, isPlaying = false, isSoundOn = false, currentStep = 0, timer, sequencerData = {};
+        let aiMode = 'scale';
+        let currentChordHits = []; 
+
+        // プロキシサーバー (Vercel API) 経由で呼び出すように修正
+        async function callGemini(prompt, systemPrompt, schema) {
+            const url = "/api/gemini"; // 自分のサーバーを呼ぶ
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema
+                }
+            };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Vercel API error");
+            const data = await response.json();
+            return JSON.parse(data.candidates[0].content.parts[0].text);
+        }
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioCtx.createGain();
+                masterGain.connect(audioCtx.destination);
+                masterGain.gain.value = volumeFader.value;
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(freq, time = 0) {
+            if (!isSoundOn || !audioCtx) return;
+            const now = time || audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+            osc.connect(gain).connect(masterGain);
+            osc.start(now);
+            osc.stop(now + 1.0);
+        }
+
+        function getFreq(note, octave) {
+            const index = chromaticNotes.indexOf(note);
+            return 440 * Math.pow(2, (index - 9 + (octave - 4) * 12) / 12);
+        }
+
+        function updateUI(activeHits = []) {
+            const root = rootSelect.value;
+            const type = keyTypeSelect.value;
+            const currentScale = scales[type] || { intervals: [0, 2, 4, 5, 7, 9, 11] };
+            const scaleNotes = currentScale.intervals.map(i => chromaticNotes[(chromaticNotes.indexOf(root) + i) % 12]);
+
+            padGrid.innerHTML = '';
+            
+            const layoutOrder = [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3];
+
+            layoutOrder.forEach((i, visualIdx) => {
+                const note = padNotes[i];
+                const pad = document.createElement('div');
+                const isScale = scaleNotes.includes(note.name);
+                const isPlayingNote = activeHits.includes(i);
+                
+                const padDisplayNum = visualIdx + 1;
+                
+                pad.className = `pad ${isScale ? 'active' : ''} ${isPlayingNote ? 'playing' : ''}`;
+                pad.innerHTML = `
+                    <div class="pad-id">PAD ${String(padDisplayNum).padStart(2, '0')}</div>
+                    <div class="pad-note">${note.fullName}</div>
+                `;
+                
+                const triggerPad = () => {
+                    initAudio();
+                    playSound(getFreq(note.name, note.octave));
+                    pad.classList.add('playing');
+                    setTimeout(() => pad.classList.remove('playing'), 100);
+                };
+
+                pad.onmousedown = triggerPad;
+                pad.ontouchstart = (e) => { e.preventDefault(); triggerPad(); };
+                
+                padGrid.appendChild(pad);
+            });
+        }
+
+        function renderSequencer() {
+            seqContainer.innerHTML = '';
+            const root = rootSelect.value;
+            const currentScale = scales[keyTypeSelect.value] || { intervals: [0, 2, 4, 5, 7, 9, 11] };
+            const scaleNotes = currentScale.intervals.map(i => chromaticNotes[(chromaticNotes.indexOf(root) + i) % 12]);
+
+            [...padNotes].reverse().forEach((note, revIdx) => {
+                const realIdx = 15 - revIdx;
+                if (!scaleNotes.includes(note.name)) return;
+
+                const row = document.createElement('div');
+                row.className = 'seq-row';
+                
+                const key = document.createElement('div');
+                key.className = `seq-key ${note.name === root ? 'root' : ''}`;
+                key.textContent = note.fullName;
+                row.appendChild(key);
+
+                const grid = document.createElement('div');
+                grid.className = 'seq-grid';
+                if (!sequencerData[realIdx]) sequencerData[realIdx] = new Array(16).fill(false);
+
+                for (let s = 0; s < 16; s++) {
+                    const cell = document.createElement('div');
+                    const isMeasureAlt = Math.floor(s / 4) % 2 === 1;
+                    const isActive = sequencerData[realIdx][s] ? 'active' : '';
+                    const isCurrent = (currentStep === s && isPlaying) ? 'current' : '';
+                    const altClass = isMeasureAlt ? 'measure-alt' : '';
+                    
+                    cell.className = `seq-cell ${isActive} ${isCurrent} ${altClass}`;
+                    
+                    cell.onclick = () => {
+                        sequencerData[realIdx][s] = !sequencerData[realIdx][s];
+                        cell.classList.toggle('active');
+                    };
+                    grid.appendChild(cell);
+                }
+                row.appendChild(grid);
+                seqContainer.appendChild(row);
+            });
+        }
+
+        function runCycle() {
+            if (!isPlaying) return;
+            const bpm = parseInt(bpmInput.value);
+            const stepMs = (60000 / bpm);
+            
+            if (modeSelect.value === 'scale') {
+                const hits = [];
+                Object.keys(sequencerData).forEach(idx => {
+                    if (sequencerData[idx][currentStep]) {
+                        playSound(getFreq(padNotes[idx].name, padNotes[idx].octave));
+                        hits.push(parseInt(idx));
+                    }
+                });
+                updateUI(hits);
+                
+                const allCells = document.querySelectorAll('.seq-cell');
+                allCells.forEach(c => c.classList.remove('current'));
+                
+                const rows = document.querySelectorAll('.seq-row');
+                rows.forEach(row => {
+                    const cell = row.querySelector(`.seq-cell:nth-child(${currentStep + 1})`);
+                    if (cell) cell.classList.add('current');
+                });
+
+                currentStep = (currentStep + 1) % 16;
+            } else {
+                const curKey = keyTypeSelect.value;
+                const curSub = subSelect.value;
+                const prog = (progressions[curKey] && progressions[curKey][curSub]) ? progressions[curKey][curSub] : null;
+
+                if (prog) {
+                    if (currentStep % 4 === 0) {
+                        const measureIdx = Math.floor(currentStep / 4);
+                        const progIdx = measureIdx % prog.degrees.length;
+                        const rootIdx = chromaticNotes.indexOf(rootSelect.value);
+                        const chordNames = prog.degrees[progIdx].map(i => chromaticNotes[(rootIdx + i) % 12]);
+                        
+                        chordNames.forEach(n => playSound(getFreq(n, 3)));
+                        statusLabel.textContent = `CHORD: ${prog.labels[progIdx]}`;
+                        
+                        currentChordHits = [];
+                        padNotes.forEach((n, i) => { if(chordNames.includes(n.name)) currentChordHits.push(i); });
+                        updateUI(currentChordHits);
+                    }
+                    const loopLimit = prog.degrees.length * 4;
+                    currentStep = (currentStep + 1) % loopLimit;
+                } else {
+                    currentStep = (currentStep + 1) % 16;
+                }
+            }
+
+            timer = setTimeout(runCycle, stepMs);
+        }
+
+        async function handleAI() {
+            const prompt = aiInput.value;
+            aiStatus.textContent = "Generating...";
+            aiSubmit.disabled = true;
+
+            try {
+                if (aiMode === 'scale') {
+                    const schema = {
+                        type: "OBJECT",
+                        properties: {
+                            keyName: { type: "STRING" },
+                            intervals: { type: "ARRAY", items: { type: "NUMBER" } }
+                        },
+                        required: ["keyName", "intervals"]
+                    };
+                    const result = await callGemini(
+                        `Suggest a musical scale based on: ${prompt}. Root is ${rootSelect.value}.`,
+                        "You are a music expert. Return keyName and 7 intervals (0-11).",
+                        schema
+                    );
+                    
+                    const scaleId = `ai_${Date.now()}`;
+                    scales[scaleId] = { name: { ja: result.keyName, en: result.keyName }, intervals: result.intervals };
+                    const opt = document.createElement('option');
+                    opt.value = scaleId;
+                    opt.textContent = `✨ AI: ${result.keyName}`;
+                    keyTypeSelect.prepend(opt);
+                    keyTypeSelect.value = scaleId;
+                } else {
+                    const schema = {
+                        type: "OBJECT",
+                        properties: {
+                            name: { type: "STRING" },
+                            labels: { type: "ARRAY", items: { type: "STRING" } },
+                            degrees: { type: "ARRAY", items: { type: "ARRAY", items: { type: "NUMBER" } } }
+                        },
+                        required: ["name", "labels", "degrees"]
+                    };
+                    const result = await callGemini(
+                        `Create a chord progression for ${prompt}. Root is ${rootSelect.value}.`,
+                        "Return name, labels (array of 4 strings for 4 chords), and degrees (array of 4 arrays, each containing 3-4 intervals). Ensure you generate exactly 4 distinct chords for a 4-bar loop.",
+                        schema
+                    );
+
+                    const progId = `ai_${Date.now()}`;
+                    const currentKeyType = keyTypeSelect.value;
+                    if (!progressions[currentKeyType]) progressions[currentKeyType] = {};
+                    
+                    progressions[currentKeyType][progId] = {
+                        name: { ja: result.name, en: result.name },
+                        labels: result.labels,
+                        degrees: result.degrees
+                    };
+                    
+                    modeSelect.value = 'progression';
+                    updateSubOptions();
+                    subSelect.value = progId;
+                    currentStep = 0;
+                }
+                aiModal.classList.add('hidden');
+            } catch (e) {
+                aiStatus.textContent = "Generation failed. Please try again.";
+            } finally {
+                aiSubmit.disabled = false;
+                updateUI();
+                renderSequencer();
+            }
+        }
+
+        aiScaleBtn.onclick = () => { aiMode = 'scale'; aiModalTitle.textContent = "✨ AI Scale Suggestion"; aiModal.classList.remove('hidden'); };
+        aiProgBtn.onclick = () => { aiMode = 'prog'; aiModalTitle.textContent = "✨ AI Progression Suggestion"; aiModal.classList.remove('hidden'); };
+        aiClose.onclick = () => aiModal.classList.add('hidden');
+        aiSubmit.onclick = handleAI;
+
+        playBtn.onclick = () => {
+            initAudio();
+            if (isPlaying) {
+                isPlaying = false;
+                playBtn.textContent = 'PLAY';
+                playBtn.classList.remove('active');
+                clearTimeout(timer);
+                const allCells = document.querySelectorAll('.seq-cell');
+                allCells.forEach(c => c.classList.remove('current'));
+            } else {
+                isPlaying = true;
+                playBtn.textContent = 'PAUSE';
+                playBtn.classList.add('active');
+                statusLabel.textContent = 'RUNNING';
+                if (modeSelect.value === 'progression') currentStep = 0;
+                runCycle();
+            }
+        };
+
+        stopBtn.onclick = () => {
+            isPlaying = false;
+            currentStep = 0;
+            playBtn.textContent = 'PLAY';
+            playBtn.classList.remove('active');
+            statusLabel.textContent = 'STOPPED';
+            clearTimeout(timer);
+            const allCells = document.querySelectorAll('.seq-cell');
+            allCells.forEach(c => c.classList.remove('current'));
+            updateUI();
+            renderSequencer();
+        };
+
+        soundToggle.onclick = () => {
+            initAudio();
+            isSoundOn = !isSoundOn;
+            soundIcon.textContent = isSoundOn ? '🔊' : '🔈';
+            soundToggle.innerHTML = `${isSoundOn ? '🔊' : '🔈'} SOUND ${isSoundOn ? 'ON' : 'OFF'}`;
+            soundToggle.classList.toggle('bg-green-800', isSoundOn);
+        };
+
+        volumeFader.oninput = () => { if(masterGain) masterGain.gain.value = volumeFader.value; };
+        bpmInput.oninput = () => bpmDisplay.textContent = `${bpmInput.value} BPM`;
+        
+        modeSelect.onchange = updateSubOptions;
+        keyTypeSelect.onchange = updateSubOptions;
+        rootSelect.onchange = () => { updateUI(); renderSequencer(); };
+        langSelect.onchange = (e) => {
+            currentLang = e.target.value;
+            updateSubOptions();
+        };
+
+        function updateSubOptions() {
+            const mode = modeSelect.value;
+            const key = keyTypeSelect.value;
+            subSelect.innerHTML = '';
+            
+            if (mode === 'scale') {
+                const opt = document.createElement('option');
+                const s = scales[key] || scales['major'];
+                opt.textContent = s.name[currentLang] || s.name;
+                subSelect.appendChild(opt);
+            } else {
+                const currentProgs = progressions[key] || progressions['major'];
+                Object.keys(currentProgs).forEach(k => {
+                    const opt = document.createElement('option');
+                    opt.value = k;
+                    opt.textContent = currentProgs[k].name[currentLang] || currentProgs[k].name;
+                    subSelect.appendChild(opt);
+                });
+            }
+            updateUI();
+            renderSequencer();
+        }
+
+        document.querySelectorAll('.tab').forEach(t => {
+            t.onclick = () => {
+                document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+                t.classList.add('active');
+                document.querySelectorAll('.view-panel').forEach(v => v.classList.add('hidden'));
+                document.getElementById(`view-${t.dataset.view}`).classList.remove('hidden');
+                if (t.dataset.view === 'sequencer') renderSequencer();
+            };
+        });
+
+        document.getElementById('clear-seq').onclick = () => { sequencerData = {}; renderSequencer(); };
+
+        updateSubOptions();
+    </script>
+</body>
+</html>
