@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pad Scale Finder</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- MIDI Writer Library -->
-    <script src="https://unpkg.com/midi-writer-js@2.1.4/browser/midi-writer.js"></script>
     <style>
         :root {
             --bg-dark: #0f0f0f;
@@ -14,6 +12,7 @@
             --pad-bg: #222222;
             --accent-red: #ff3b3b;
             --accent-green: #00ff00;
+            --accent-green-bright: #39ff14;
             --border-color: #333333;
         }
 
@@ -222,7 +221,29 @@
         }
 
         .btn:hover { background-color: #444; }
-        .btn-red.active { background-color: var(--accent-red); color: white; border-color: #ff6666; }
+
+        #sound-toggle.active-green {
+            background-color: var(--accent-green-bright) !important;
+            color: #000000 !important;
+            border-color: #ffffff !important;
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.7) !important;
+            font-weight: 800 !important;
+        }
+
+        #rec-btn.active-rec {
+            background-color: var(--accent-red) !important;
+            color: #fff !important;
+            border-color: #fff !important;
+            box-shadow: 0 0 15px rgba(255, 59, 59, 0.7) !important;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+        
         .btn-blue { background-color: #2563eb; border-color: #1d4ed8; }
         .btn-blue:hover { background-color: #1d4ed8; }
 
@@ -300,13 +321,13 @@
         }
         
         .seq-cell.current { 
-            background-color: rgba(255, 255, 255, 0.4) !important; 
-            box-shadow: inset 0 0 0 1px white;
+            background-color: rgba(255, 255, 255, 0.2) !important; 
+            box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.8);
         }
         
         .seq-cell.active.current {
             background-color: #aaffaa !important;
-            box-shadow: 0 0 5px white;
+            box-shadow: 0 0 10px white, inset 0 0 0 2px white;
         }
         
         .seq-cell.measure-alt { background-color: #252525; }
@@ -332,10 +353,13 @@
         <!-- Header -->
         <div class="header">
             <div class="status-area">
-                <div class="flex items-center gap-4 mb-1">
+                <div class="flex items-center gap-2 mb-1">
                     <span class="label-small">NAVIGATOR</span>
-                    <button id="sound-toggle" class="bg-[#333] px-3 py-1 rounded text-[10px] font-bold flex items-center gap-1">
+                    <button id="sound-toggle" class="btn text-[10px] font-bold px-3 py-1 flex items-center gap-1 transition-all duration-300">
                         <span id="sound-icon">🔈</span> SOUND OFF
+                    </button>
+                    <button id="rec-btn" class="btn text-[10px] font-bold px-3 py-1 flex items-center gap-1 transition-all duration-300">
+                        <span class="w-2 h-2 rounded-full bg-red-600"></span> REC
                     </button>
                 </div>
                 <div id="status-label" class="status-text uppercase tracking-widest">STOPPED</div>
@@ -353,7 +377,8 @@
 
         <div id="view-sequencer" class="view-panel hidden">
             <div id="sequencer-container"></div>
-            <div class="mt-2 flex justify-end">
+            <div class="mt-2 flex justify-between items-center">
+                <div class="label-small text-[9px] text-gray-500">PROG モードで REC を押すと再生内容がここに書き込まれます</div>
                 <button id="clear-seq" class="text-[10px] text-gray-500 hover:text-white uppercase font-bold">Clear All Steps</button>
             </div>
         </div>
@@ -460,6 +485,7 @@
         const stopBtn = document.getElementById('stop-btn');
         const exportBtn = document.getElementById('export-btn');
         const soundToggle = document.getElementById('sound-toggle');
+        const recBtn = document.getElementById('rec-btn');
         const soundIcon = document.getElementById('sound-icon');
         const volumeFader = document.getElementById('volume-fader');
         const statusLabel = document.getElementById('status-label');
@@ -487,7 +513,8 @@
             padNotes.push({ 
                 name: chromaticNotes[noteIndex], 
                 fullName: chromaticNotes[noteIndex] + octave, 
-                octave 
+                octave,
+                midi: 12 * (octave + 1) + noteIndex
             });
         }
 
@@ -503,40 +530,80 @@
                 junkun: { name: { ja: '循環進行 (I-VIm-IIm-V)', en: 'Standard Cycle' }, labels: ['I', 'VIm', 'IIm', 'V'], degrees: [[0,4,7], [9,0,4], [2,5,9], [7,11,2]] },
                 canon: { name: { ja: 'カノン進行', en: 'Canon' }, labels: ['I', 'V', 'VIm', 'IIIm', 'IV', 'I', 'IV', 'V'], degrees: [[0,4,7], [7,11,2], [9,0,4], [4,7,11], [5,9,0], [0,4,7], [5,9,0], [7,11,2]] },
                 pop_rock: { name: { ja: 'ポップロック (I-V-VIm-IV)', en: 'Pop Rock (4-Chords)' }, labels: ['I', 'V', 'VIm', 'IV'], degrees: [[0,4,7], [7,11,2], [9,0,4], [5,9,0]] },
-                heartbeat: { name: { ja: '心の鼓動 (VIm-V-IV-V)', en: 'Sensitive (VIm-V-IV-V)' }, labels: ['VIm', 'V', 'IV', 'V'], degrees: [[9,0,4], [7,11,2], [5,9,0], [7,11,2]] },
+                heartbeat: { name: { ja: '心の鼓動 (VIm-V-IV-V)', en: 'Heartbeat' }, labels: ['VIm', 'V', 'IV', 'V'], degrees: [[9,0,4], [7,11,2], [5,9,0], [7,11,2]] },
                 jazzy: { name: { ja: 'ジャジー (IIm7-V7-IM7-VIm7)', en: 'Standard 2-5-1-6' }, labels: ['IIm7', 'V7', 'IM7', 'VIm7'], degrees: [[2,5,9,0], [7,11,2,5], [0,4,7,11], [9,0,4,7]] },
-                dreamy: { name: { ja: '浮遊感 (IVM7-V7-IM7-I7)', en: 'Dreamy (4-5-1-1)' }, labels: ['IVM7', 'V7', 'IM7', 'I7'], degrees: [[5,9,0,4], [7,11,2,5], [0,4,7,11], [0,4,7,10]] },
-                peaceful: { name: { ja: '穏やか (I-IIm-V-I)', en: 'Peaceful (1-2-5-1)' }, labels: ['I', 'IIm', 'V', 'I'], degrees: [[0,4,7], [2,5,9], [7,11,2], [0,4,7]] },
-                rising: { name: { ja: '上昇進行 (IV-V-VIm-VII°)', en: 'Rising' }, labels: ['IV', 'V', 'VIm', 'VII°'], degrees: [[5,9,0], [7,11,2], [9,0,4], [11,2,5]] }
+                floating: { name: { ja: '浮遊感 (IVM7-V7-IM7-I7)', en: 'Floating' }, labels: ['IVM7', 'V7', 'IM7', 'I7'], degrees: [[5,9,0,4], [7,11,2,5], [0,4,7,11], [0,4,7,10]] },
+                calm: { name: { ja: '穏やか (I-IIm-V-I)', en: 'Calm' }, labels: ['I', 'IIm', 'V', 'I'], degrees: [[0,4,7], [2,5,9], [7,11,2], [0,4,7]] },
+                ascending: { name: { ja: '上昇進行 (IV-V-VIm-VII°)', en: 'Ascending' }, labels: ['IV', 'V', 'VIm', 'VII°'], degrees: [[5,9,0], [7,11,2], [9,0,4], [11,2,5]] }
             },
             minor: {
-                // Minor Key context (Natural Minor intervals as base)
                 marusa: { name: { ja: '丸サ進行 (bVIM7-V7-Im7-bIII7)', en: 'Just The Two of Us' }, labels: ['bVIM7', 'V7', 'Im7', 'bIII7'], degrees: [[8,0,3,7], [7,11,2,5], [0,3,7,10], [3,7,10,1]] },
-                cliche: { name: { ja: 'マイナー・クリシェ', en: 'Line Cliche' }, labels: ['Im', 'ImM7', 'Im7', 'Im6'], degrees: [[0,3,7], [0,3,7,11], [0,3,7,10], [0,3,7,9]] },
+                cliche: { name: { ja: 'マイナー・クリシェ', en: 'Minor Cliche' }, labels: ['Im', 'ImM7', 'Im7', 'Im6'], degrees: [[0,3,7], [0,3,7,11], [0,3,7,10], [0,3,7,9]] },
                 emotional: { name: { ja: 'エモーショナル (Im-bVI-bIII-bVII)', en: 'Emotional Minor' }, labels: ['Im', 'bVI', 'bIII', 'bVII'], degrees: [[0,3,7], [8,0,3], [3,7,10], [10,2,5]] },
-                dark_cycle: { name: { ja: '暗い循環 (Im-IVm-V7-Im)', en: 'Dark Cycle' }, labels: ['Im', 'IVm', 'V7', 'Im'], degrees: [[0,3,7], [5,8,0], [7,11,2,5], [0,3,7]] },
+                dark: { name: { ja: '暗い循環 (Im-IVm-V7-Im)', en: 'Dark Cycle' }, labels: ['Im', 'IVm', 'V7', 'Im'], degrees: [[0,3,7], [5,8,0], [7,11,2,5], [0,3,7]] },
                 andes: { name: { ja: 'アンデス進行 (Im-bVII-bVI-V)', en: 'Andes / Spanish' }, labels: ['Im', 'bVII', 'bVI', 'V'], degrees: [[0,3,7], [10,2,5], [8,0,3], [7,11,2]] },
-                chill: { name: { ja: 'チル (Im7-IV7-Im7-IV7)', en: 'Dorian Chill' }, labels: ['Im7', 'IV7', 'Im7', 'IV7'], degrees: [[0,3,7,10], [5,9,0,2], [0,3,7,10], [5,9,0,2]] },
+                chill: { name: { ja: 'チル (Im7-IV7-Im7-IV7)', en: 'Chill' }, labels: ['Im7', 'IV7', 'Im7', 'IV7'], degrees: [[0,3,7,10], [5,9,0,3], [0,3,7,10], [5,9,0,3]] },
                 gothic: { name: { ja: 'ゴシック (Im-VIm7b5-bVI-V)', en: 'Gothic' }, labels: ['Im', 'VIm7b5', 'bVI', 'V'], degrees: [[0,3,7], [9,0,3,7], [8,0,3], [7,11,2]] },
-                ballad: { name: { ja: '切ないバラード (IIm7b5-V7-Im)', en: 'Minor 2-5-1' }, labels: ['IIm7b5', 'V7', 'Im', 'Im'], degrees: [[2,5,8,0], [7,11,2,5], [0,3,7], [0,3,7]] },
-                vampire: { name: { ja: '吸血鬼 (Im-bVI-bVII-Im)', en: 'Vampire' }, labels: ['Im', 'bVI', 'bVII', 'Im'], degrees: [[0,3,7], [8,0,3], [10,2,5], [0,3,7]] },
-                tension: { name: { ja: '緊張感 (Im-bII-Im-bII)', en: 'Phrygian Tension' }, labels: ['Im', 'bII', 'Im', 'bII'], degrees: [[0,3,7], [1,5,8], [0,3,7], [1,5,8]] }
+                sad: { name: { ja: '切ないバラード (IIm7b5-V7-Im)', en: 'Sad Ballad' }, labels: ['IIm7b5', 'V7', 'Im', 'Im'], degrees: [[2,5,8,0], [7,11,2,5], [0,3,7], [0,3,7]] },
+                vampire: { name: { ja: '吸血鬼 (Im-bVI-bVll-Im)', en: 'Vampire' }, labels: ['Im', 'bVI', 'bVII', 'Im'], degrees: [[0,3,7], [8,0,3], [10,2,5], [0,3,7]] },
+                tense: { name: { ja: '緊張感 (Im-bll-Im-bll)', en: 'Tense' }, labels: ['Im', 'bII', 'Im', 'bII'], degrees: [[0,3,7], [1,5,8], [0,3,7], [1,5,8]] }
             }
         };
 
-        let audioCtx, masterGain, isPlaying = false, isSoundOn = false, currentStep = 0, timer, sequencerData = {};
+        let audioCtx, masterGain, isPlaying = false, isSoundOn = false, isRecording = false, currentStep = 0, timer, sequencerData = {};
         let aiMode = 'scale';
         let currentChordHits = []; 
+
+        const MidiEncoder = {
+            numToVarLen(num) {
+                let bytes = [];
+                bytes.push(num & 0x7F);
+                while (num >>= 7) bytes.push((num & 0x7F) | 0x80);
+                return bytes.reverse();
+            },
+            strToBytes(str) {
+                return Array.from(str).map(c => c.charCodeAt(0));
+            },
+            getMidiFile(tracks, ticksPerBeat = 128) {
+                let header = [
+                    ...this.strToBytes('MThd'),
+                    0x00, 0x00, 0x00, 0x06,
+                    0x00, 0x01,
+                    (tracks.length >> 8) & 0xFF, tracks.length & 0xFF,
+                    (ticksPerBeat >> 8) & 0xFF, ticksPerBeat & 0xFF
+                ];
+                let body = [];
+                tracks.forEach(t => body.push(...this.getTrackChunk(t)));
+                return new Uint8Array([...header, ...body]);
+            },
+            getTrackChunk(events) {
+                let data = [];
+                events.forEach(e => {
+                    data.push(...this.numToVarLen(e.delta));
+                    data.push(...e.bytes);
+                });
+                data.push(0x00, 0xFF, 0x2F, 0x00);
+                let len = data.length;
+                return [
+                    ...this.strToBytes('MTrk'),
+                    (len >> 24) & 0xFF, (len >> 16) & 0xFF, (len >> 8) & 0xFF, len & 0xFF,
+                    ...data
+                ];
+            },
+            createNoteOn(channel, note, velocity) { return [0x90 | channel, note, velocity]; },
+            createNoteOff(channel, note, velocity) { return [0x80 | channel, note, velocity]; },
+            createTempo(bpm) {
+                let microseconds = Math.round(60000000 / bpm);
+                return [0xFF, 0x51, 0x03, (microseconds >> 16) & 0xFF, (microseconds >> 8) & 0xFF, microseconds & 0xFF];
+            }
+        };
 
         async function callGemini(prompt, systemPrompt, schema) {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
             const payload = {
                 contents: [{ parts: [{ text: prompt }] }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: schema
-                }
+                generationConfig: { responseMimeType: "application/json", responseSchema: schema }
             };
 
             for (let i = 0; i < 5; i++) {
@@ -548,9 +615,7 @@
                     });
                     const data = await response.json();
                     return JSON.parse(data.candidates[0].content.parts[0].text);
-                } catch (e) {
-                    await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
-                }
+                } catch (e) { await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000)); }
             }
             throw new Error("Gemini API error");
         }
@@ -587,17 +652,11 @@
         function updateUI(activeHits = []) {
             const root = rootSelect.value;
             const type = keyTypeSelect.value;
-            const currentScale = scales[type] || (scales[keyTypeSelect.value] ? scales[keyTypeSelect.value] : scales.major);
+            const currentScale = scales[type] || scales.major;
             const scaleNotes = currentScale.intervals.map(i => chromaticNotes[(chromaticNotes.indexOf(root) + i) % 12]);
 
             padGrid.innerHTML = '';
-            
-            const layoutOrder = [
-                12, 13, 14, 15,
-                8, 9, 10, 11,
-                4, 5, 6, 7,
-                0, 1, 2, 3
-            ];
+            const layoutOrder = [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3];
 
             layoutOrder.forEach((i, visualIdx) => {
                 const note = padNotes[i];
@@ -605,11 +664,9 @@
                 const isScale = scaleNotes.includes(note.name);
                 const isPlayingNote = activeHits.includes(i);
                 
-                const padDisplayNum = visualIdx + 1;
-                
                 pad.className = `pad ${isScale ? 'active' : ''} ${isPlayingNote ? 'playing' : ''}`;
                 pad.innerHTML = `
-                    <div class="pad-id">PAD ${String(padDisplayNum).padStart(2, '0')}</div>
+                    <div class="pad-id">PAD ${String(visualIdx + 1).padStart(2, '0')}</div>
                     <div class="pad-note">${note.fullName}</div>
                 `;
                 
@@ -619,10 +676,8 @@
                     pad.classList.add('playing');
                     setTimeout(() => pad.classList.remove('playing'), 100);
                 };
-
                 pad.onmousedown = triggerPad;
                 pad.ontouchstart = (e) => { e.preventDefault(); triggerPad(); };
-                
                 padGrid.appendChild(pad);
             });
         }
@@ -635,11 +690,12 @@
 
             [...padNotes].reverse().forEach((note, revIdx) => {
                 const realIdx = 15 - revIdx;
+                // UI上ではスケール外も表示するが、シーケンサーとしての動作はスケールに縛ることもできる。
+                // 録音時はスケール外も記録できるようにするため、一旦全て表示（またはスケール内のみ）
                 if (!scaleNotes.includes(note.name)) return;
 
                 const row = document.createElement('div');
                 row.className = 'seq-row';
-                
                 const key = document.createElement('div');
                 key.className = `seq-key ${note.name === root ? 'root' : ''}`;
                 key.textContent = note.fullName;
@@ -647,17 +703,13 @@
 
                 const grid = document.createElement('div');
                 grid.className = 'seq-grid';
+                grid.dataset.padIndex = realIdx;
                 if (!sequencerData[realIdx]) sequencerData[realIdx] = new Array(16).fill(false);
 
                 for (let s = 0; s < 16; s++) {
                     const cell = document.createElement('div');
-                    const isMeasureAlt = Math.floor(s / 4) % 2 === 1;
-                    const isActive = sequencerData[realIdx][s] ? 'active' : '';
-                    const isCurrent = (currentStep === s && isPlaying) ? 'current' : '';
-                    const altClass = isMeasureAlt ? 'measure-alt' : '';
-                    
-                    cell.className = `seq-cell ${isActive} ${isCurrent} ${altClass}`;
-                    
+                    cell.className = `seq-cell ${sequencerData[realIdx][s] ? 'active' : ''} ${Math.floor(s/4)%2===1?'measure-alt':''}`;
+                    cell.dataset.stepIndex = s;
                     cell.onclick = () => {
                         sequencerData[realIdx][s] = !sequencerData[realIdx][s];
                         cell.classList.toggle('active');
@@ -674,213 +726,139 @@
             const bpm = parseInt(bpmInput.value);
             const stepMs = (60000 / bpm);
             
+            // シーケンサー表示の更新
+            const cells = seqContainer.querySelectorAll('.seq-cell');
+            cells.forEach(cell => {
+                if (parseInt(cell.dataset.stepIndex) === (currentStep % 16)) {
+                    cell.classList.add('current');
+                } else {
+                    cell.classList.remove('current');
+                }
+            });
+
             if (modeSelect.value === 'scale') {
+                const stepIdx = currentStep % 16;
                 const hits = [];
                 Object.keys(sequencerData).forEach(idx => {
-                    if (sequencerData[idx][currentStep]) {
+                    if (sequencerData[idx][stepIdx]) {
                         playSound(getFreq(padNotes[idx].name, padNotes[idx].octave));
                         hits.push(parseInt(idx));
                     }
                 });
                 updateUI(hits);
-                
-                const allCells = document.querySelectorAll('.seq-cell');
-                allCells.forEach(c => c.classList.remove('current'));
-                
-                const rows = document.querySelectorAll('.seq-row');
-                rows.forEach(row => {
-                    const cell = row.querySelector(`.seq-cell:nth-child(${currentStep + 1})`);
-                    if (cell) cell.classList.add('current');
-                });
-
                 currentStep = (currentStep + 1) % 16;
             } else {
+                // Progression モード
                 const curKey = keyTypeSelect.value;
                 const curSub = subSelect.value;
                 const prog = (progressions[curKey] && progressions[curKey][curSub]) ? progressions[curKey][curSub] : null;
 
                 if (prog) {
-                    const loopLimit = prog.degrees.length * 4;
-                    if (currentStep >= loopLimit) currentStep = 0;
+                    const loopSteps = prog.degrees.length * 4;
+                    const stepIdx = currentStep % loopSteps;
 
-                    if (currentStep % 4 === 0) {
-                        const measureIdx = Math.floor(currentStep / 4);
+                    if (stepIdx % 4 === 0) {
+                        const measureIdx = Math.floor(stepIdx / 4);
                         const progIdx = measureIdx % prog.degrees.length;
                         const rootIdx = chromaticNotes.indexOf(rootSelect.value);
-                        
-                        // Use degree intervals to build the chord from the root note
                         const chordNames = prog.degrees[progIdx].map(i => chromaticNotes[(rootIdx + i) % 12]);
                         
-                        chordNames.forEach((n, i) => {
-                            // Basic voicing: root in oct 3, others in oct 4
-                            const oct = (i === 0) ? 3 : 4;
-                            playSound(getFreq(n, oct));
-                        });
-                        
+                        // 音を鳴らす
+                        chordNames.forEach((n, i) => playSound(getFreq(n, i === 0 ? 3 : 4)));
                         statusLabel.textContent = `CHORD: ${prog.labels[progIdx]}`;
                         
+                        // 視覚的ヒット計算
                         currentChordHits = [];
                         padNotes.forEach((n, i) => { if(chordNames.includes(n.name)) currentChordHits.push(i); });
                         updateUI(currentChordHits);
+
+                        // --- 録音ロジック ---
+                        if (isRecording) {
+                            // 現在のステップから4ステップ分（1小節）同じコードを敷き詰める（または先頭のみ）
+                            // 16ステップ制限があるため、16を越える場合はループさせる
+                            const startStep = stepIdx % 16;
+                            currentChordHits.forEach(padIdx => {
+                                if (!sequencerData[padIdx]) sequencerData[padIdx] = new Array(16).fill(false);
+                                // 先頭の1拍目に記録
+                                sequencerData[padIdx][startStep] = true;
+                            });
+                            // シーケンサー画面を表示しているなら再描画
+                            if (!document.getElementById('view-sequencer').classList.contains('hidden')) {
+                                renderSequencer();
+                            }
+                        }
                     }
-                    currentStep = (currentStep + 1) % loopLimit;
+                    currentStep++;
                 } else {
                     currentStep = (currentStep + 1) % 16;
                 }
             }
-
             timer = setTimeout(runCycle, stepMs);
         }
 
         function exportMIDI() {
-            // ライブラリ読み込みチェック
-            if (typeof MidiWriter === 'undefined') {
-                alert('MIDIライブラリが読み込まれていません。ページを再読み込みするか、ネットワーク接続を確認してください。');
-                return;
-            }
-
-            const trackSeq = new MidiWriter.Track();
-            const trackChords = new MidiWriter.Track();
+            const ticksPerBeat = 128;
             const bpm = parseInt(bpmInput.value);
             
-            trackSeq.setTempo(bpm);
-            trackSeq.addTrackName('Sequencer Drums');
-            trackChords.setTempo(bpm);
-            trackChords.addTrackName('Chord Progression');
+            let track1 = [
+                { delta: 0, bytes: MidiEncoder.createTempo(bpm) },
+                { delta: 0, bytes: [0xFF, 0x03, 0x09, ...MidiEncoder.strToBytes('Sequencer')] }
+            ];
 
-            // Sequencer Export (16 steps = 4 bars in this app's logic of 1 step = 1 beat)
-            // Note: The UI says "1 Bar = 4 Steps". So 16 steps is 4 bars.
-            // MidiWriter '4' = Quarter Note (1 beat).
-            
+            let lastTick = 0;
             for (let s = 0; s < 16; s++) {
-                // 1. Gather notes for this step
-                const stepNotes = [];
+                const currentTick = s * ticksPerBeat;
                 Object.keys(sequencerData).forEach(idx => {
                     if (sequencerData[idx][s]) {
-                        stepNotes.push(padNotes[idx].fullName);
+                        const note = padNotes[idx].midi;
+                        track1.push({ delta: currentTick - lastTick, bytes: MidiEncoder.createNoteOn(0, note, 90) });
+                        lastTick = currentTick;
+                        track1.push({ delta: ticksPerBeat - 10, bytes: MidiEncoder.createNoteOff(0, note, 0) });
+                        lastTick += (ticksPerBeat - 10);
                     }
                 });
-
-                // Add to Track 1
-                if (stepNotes.length > 0) {
-                    trackSeq.addEvent(new MidiWriter.NoteEvent({
-                        pitch: stepNotes,
-                        duration: '4' // Quarter note
-                    }));
-                } else {
-                    trackSeq.addEvent(new MidiWriter.NoteEvent({
-                        pitch: [], // Rest
-                        duration: '4'
-                    }));
-                }
-
-                // 2. Add Chords for Track 2 (Only if in Progression Mode)
-                if (modeSelect.value === 'progression') {
-                    const curKey = keyTypeSelect.value;
-                    const curSub = subSelect.value;
-                    const prog = (progressions[curKey] && progressions[curKey][curSub]) ? progressions[curKey][curSub] : null;
-
-                    if (prog) {
-                        // Chords change every 4 steps (Every bar)
-                        if (s % 4 === 0) {
-                            const measureIdx = Math.floor(s / 4);
-                            const progIdx = measureIdx % prog.degrees.length;
-                            const rootIdx = chromaticNotes.indexOf(rootSelect.value);
-                            
-                            const chordNotes = prog.degrees[progIdx].map((interval, i) => {
-                                const noteName = chromaticNotes[(rootIdx + interval) % 12];
-                                const oct = (i === 0) ? 3 : 4;
-                                return noteName + oct;
-                            });
-
-                            trackChords.addEvent(new MidiWriter.NoteEvent({
-                                pitch: chordNotes,
-                                duration: '1' // Whole note (4 beats)
-                            }));
-                        }
-                    } else {
-                         // Silence if no prog selected
-                         if (s % 4 === 0) trackChords.addEvent(new MidiWriter.NoteEvent({pitch: [], duration: '1'}));
-                    }
-                }
             }
 
-            const write = new MidiWriter.Writer([trackSeq, trackChords]);
-            const link = document.createElement('a');
-            link.href = write.dataUri();
-            link.download = `pad-scale-finder_${Date.now()}.mid`;
-            link.click();
+            const midiData = MidiEncoder.getMidiFile([track1], ticksPerBeat);
+            const blob = new Blob([midiData], { type: 'audio/midi' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pad_finder_${Date.now()}.mid`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
-
-        exportBtn.onclick = exportMIDI;
 
         async function handleAI() {
             const prompt = aiInput.value;
             aiStatus.textContent = "Generating...";
             aiSubmit.disabled = true;
-
             try {
                 if (aiMode === 'scale') {
                     const schema = {
                         type: "OBJECT",
-                        properties: {
-                            keyName: { type: "STRING" },
-                            intervals: { type: "ARRAY", items: { type: "NUMBER" } }
-                        },
+                        properties: { keyName: { type: "STRING" }, intervals: { type: "ARRAY", items: { type: "NUMBER" } } },
                         required: ["keyName", "intervals"]
                     };
-                    const result = await callGemini(
-                        `Suggest a musical scale based on: ${prompt}. Root is ${rootSelect.value}.`,
-                        "You are a music expert. Return keyName and 7 intervals (0-11).",
-                        schema
-                    );
-                    
-                    const scaleId = `ai_${Date.now()}`;
-                    scales[scaleId] = { name: { ja: result.keyName, en: result.keyName }, intervals: result.intervals };
-                    const opt = document.createElement('option');
-                    opt.value = scaleId;
-                    opt.textContent = `✨ AI: ${result.keyName}`;
-                    keyTypeSelect.prepend(opt);
-                    keyTypeSelect.value = scaleId;
+                    const result = await callGemini(`Suggest a scale: ${prompt}. Root ${rootSelect.value}.`, "Return keyName and 7 intervals.", schema);
+                    const id = `ai_scale_${Date.now()}`;
+                    scales[id] = { name: { ja: result.keyName, en: result.keyName }, intervals: result.intervals };
+                    const opt = document.createElement('option'); opt.value = id; opt.textContent = `✨ AI: ${result.keyName}`;
+                    keyTypeSelect.prepend(opt); keyTypeSelect.value = id;
                 } else {
                     const schema = {
                         type: "OBJECT",
-                        properties: {
-                            name: { type: "STRING" },
-                            labels: { type: "ARRAY", items: { type: "STRING" } },
-                            degrees: { type: "ARRAY", items: { type: "ARRAY", items: { type: "NUMBER" } } }
-                        },
+                        properties: { name: { type: "STRING" }, labels: { type: "ARRAY", items: { type: "STRING" } }, degrees: { type: "ARRAY", items: { type: "ARRAY", items: { type: "NUMBER" } } } },
                         required: ["name", "labels", "degrees"]
                     };
-                    const result = await callGemini(
-                        `Create a chord progression for ${prompt}. Root is ${rootSelect.value}.`,
-                        "Return name, labels (array of 4 strings for 4 chords), and degrees (array of 4 arrays, each containing 3-4 intervals relative to root). Ensure you generate exactly 4 distinct chords for a 4-bar loop.",
-                        schema
-                    );
-
-                    const progId = `ai_${Date.now()}`;
-                    const currentKeyType = keyTypeSelect.value;
-                    if (!progressions[currentKeyType]) progressions[currentKeyType] = {};
-                    
-                    progressions[currentKeyType][progId] = {
-                        name: { ja: result.name, en: result.name },
-                        labels: result.labels,
-                        degrees: result.degrees
-                    };
-                    
-                    modeSelect.value = 'progression';
-                    updateSubOptions();
-                    subSelect.value = progId;
-                    currentStep = 0;
+                    const result = await callGemini(`Create 4-chord progression for ${prompt}. Root ${rootSelect.value}.`, "Return name, 4 labels, and 4 sets of degree intervals.", schema);
+                    const id = `ai_prog_${Date.now()}`;
+                    const k = keyTypeSelect.value; if(!progressions[k]) progressions[k] = {};
+                    progressions[k][id] = { name: { ja: result.name, en: result.name }, labels: result.labels, degrees: result.degrees };
+                    modeSelect.value = 'progression'; updateSubOptions(); subSelect.value = id;
                 }
                 aiModal.classList.add('hidden');
-            } catch (e) {
-                aiStatus.textContent = "Generation failed. Please try again.";
-            } finally {
-                aiSubmit.disabled = false;
-                updateUI();
-                renderSequencer();
-            }
+            } catch (e) { aiStatus.textContent = "Failed."; } finally { aiSubmit.disabled = false; updateUI(); }
         }
 
         aiScaleBtn.onclick = () => { aiMode = 'scale'; aiModalTitle.textContent = "✨ AI Scale Suggestion"; aiModal.classList.remove('hidden'); };
@@ -891,85 +869,72 @@
         playBtn.onclick = () => {
             initAudio();
             if (isPlaying) {
-                isPlaying = false;
-                playBtn.textContent = 'RESUME';
-                playBtn.classList.remove('active');
-                statusLabel.textContent = 'PAUSED';
-                clearTimeout(timer);
+                isPlaying = false; playBtn.textContent = 'RESUME'; statusLabel.textContent = 'PAUSED'; clearTimeout(timer);
             } else {
-                isPlaying = true;
-                playBtn.textContent = 'PAUSE';
-                playBtn.classList.add('active');
-                statusLabel.textContent = 'RUNNING';
-                runCycle();
+                isPlaying = true; playBtn.textContent = 'PAUSE'; statusLabel.textContent = 'RUNNING'; runCycle();
             }
         };
 
         stopBtn.onclick = () => {
-            isPlaying = false;
-            currentStep = 0;
-            playBtn.textContent = 'PLAY';
-            playBtn.classList.remove('active');
-            statusLabel.textContent = 'STOPPED';
+            isPlaying = false; 
+            currentStep = 0; 
+            playBtn.textContent = 'PLAY'; 
+            statusLabel.textContent = 'STOPPED'; 
             clearTimeout(timer);
-            const allCells = document.querySelectorAll('.seq-cell');
-            allCells.forEach(c => c.classList.remove('current'));
+            const cells = seqContainer.querySelectorAll('.seq-cell');
+            cells.forEach(cell => cell.classList.remove('current'));
             updateUI();
-            if (document.querySelector('.tab[data-view="sequencer"]').classList.contains('active')) {
-                renderSequencer();
-            }
         };
 
         soundToggle.onclick = () => {
-            initAudio();
+            initAudio(); 
             isSoundOn = !isSoundOn;
-            soundIcon.textContent = isSoundOn ? '🔊' : '🔈';
-            soundToggle.innerHTML = `${isSoundOn ? '🔊' : '🔈'} SOUND ${isSoundOn ? 'ON' : 'OFF'}`;
-            soundToggle.classList.toggle('bg-green-800', isSoundOn);
+            if (isSoundOn) {
+                soundToggle.classList.add('active-green');
+                soundToggle.innerHTML = `<span id="sound-icon">🔊</span> SOUND ON`;
+            } else {
+                soundToggle.classList.remove('active-green');
+                soundToggle.innerHTML = `<span id="sound-icon">🔈</span> SOUND OFF`;
+            }
         };
 
+        recBtn.onclick = () => {
+            isRecording = !isRecording;
+            if (isRecording) {
+                recBtn.classList.add('active-rec');
+                // 録音開始時にシーケンサーをクリアするかは任意だが、ここでは上書きするようにする
+            } else {
+                recBtn.classList.remove('active-rec');
+            }
+        };
+
+        exportBtn.onclick = exportMIDI;
         volumeFader.oninput = () => { if(masterGain) masterGain.gain.value = volumeFader.value; };
         bpmInput.oninput = () => bpmDisplay.textContent = `${bpmInput.value} BPM`;
-        
-        modeSelect.onchange = () => {
-            currentStep = 0;
-            updateSubOptions();
-        };
-        keyTypeSelect.onchange = () => {
-            currentStep = 0;
-            updateSubOptions();
-        };
-        rootSelect.onchange = () => { 
-            currentStep = 0;
-            updateUI(); 
-            renderSequencer(); 
-        };
-        langSelect.onchange = (e) => {
-            currentLang = e.target.value;
-            updateSubOptions();
-        };
+        modeSelect.onchange = updateSubOptions;
+        keyTypeSelect.onchange = updateSubOptions;
+        rootSelect.onchange = () => { currentStep = 0; updateUI(); renderSequencer(); };
+        langSelect.onchange = (e) => { currentLang = e.target.value; updateSubOptions(); };
 
         function updateSubOptions() {
             const mode = modeSelect.value;
             const key = keyTypeSelect.value;
             subSelect.innerHTML = '';
-            
             if (mode === 'scale') {
                 const opt = document.createElement('option');
-                const s = scales[key] || scales['major'];
-                opt.textContent = s.name[currentLang] || s.name;
+                const s = scales[key] || scales.major;
+                opt.textContent = (s.name && s.name[currentLang]) ? s.name[currentLang] : (s.name || 'Scale');
                 subSelect.appendChild(opt);
             } else {
-                const currentProgs = progressions[key] || progressions['major'];
-                Object.keys(currentProgs).forEach(k => {
-                    const opt = document.createElement('option');
-                    opt.value = k;
-                    opt.textContent = currentProgs[k].name[currentLang] || currentProgs[k].name;
+                const progs = progressions[key] || progressions.major;
+                Object.keys(progs).forEach(k => {
+                    const opt = document.createElement('option'); opt.value = k;
+                    opt.textContent = (progs[k].name && progs[k].name[currentLang]) ? progs[k].name[currentLang] : (progs[k].name || k);
                     subSelect.appendChild(opt);
                 });
             }
             updateUI();
-            renderSequencer();
+            if(!document.getElementById('view-sequencer').classList.contains('hidden')) renderSequencer();
         }
 
         document.querySelectorAll('.tab').forEach(t => {
@@ -983,7 +948,6 @@
         });
 
         document.getElementById('clear-seq').onclick = () => { sequencerData = {}; renderSequencer(); };
-
         updateSubOptions();
     </script>
 </body>
