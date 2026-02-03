@@ -638,8 +638,8 @@
 
         // --- Modified for Canvas Environment ---
         async function callGemini(prompt, systemPrompt, schema) {
-            const apiKey = ""; 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const url = `/api/gemini`;
             
             const payload = {
                 contents: [{ role: "user", parts: [{ text: prompt }] }],
