@@ -552,8 +552,8 @@
 
         let audioCtx, masterGain, isPlaying = false, isSoundOn = false, isRecording = false, currentStep = 0, timer, sequencerData = {};
         let aiMode = 'scale';
-        let currentChordHits = []; 
 
+        /** MIDI Logic Fix: Correctly handling delta times for simultaneous notes **/
         const MidiEncoder = {
             numToVarLen(num) {
                 let bytes = [];
@@ -690,8 +690,6 @@
 
             [...padNotes].reverse().forEach((note, revIdx) => {
                 const realIdx = 15 - revIdx;
-                // UI上ではスケール外も表示するが、シーケンサーとしての動作はスケールに縛ることもできる。
-                // 録音時はスケール外も記録できるようにするため、一旦全て表示（またはスケール内のみ）
                 if (!scaleNotes.includes(note.name)) return;
 
                 const row = document.createElement('div');
@@ -726,7 +724,6 @@
             const bpm = parseInt(bpmInput.value);
             const stepMs = (60000 / bpm);
             
-            // シーケンサー表示の更新
             const cells = seqContainer.querySelectorAll('.seq-cell');
             cells.forEach(cell => {
                 if (parseInt(cell.dataset.stepIndex) === (currentStep % 16)) {
@@ -748,7 +745,6 @@
                 updateUI(hits);
                 currentStep = (currentStep + 1) % 16;
             } else {
-                // Progression モード
                 const curKey = keyTypeSelect.value;
                 const curSub = subSelect.value;
                 const prog = (progressions[curKey] && progressions[curKey][curSub]) ? progressions[curKey][curSub] : null;
@@ -763,29 +759,20 @@
                         const rootIdx = chromaticNotes.indexOf(rootSelect.value);
                         const chordNames = prog.degrees[progIdx].map(i => chromaticNotes[(rootIdx + i) % 12]);
                         
-                        // 音を鳴らす
                         chordNames.forEach((n, i) => playSound(getFreq(n, i === 0 ? 3 : 4)));
                         statusLabel.textContent = `CHORD: ${prog.labels[progIdx]}`;
                         
-                        // 視覚的ヒット計算
-                        currentChordHits = [];
-                        padNotes.forEach((n, i) => { if(chordNames.includes(n.name)) currentChordHits.push(i); });
-                        updateUI(currentChordHits);
+                        const hits = [];
+                        padNotes.forEach((n, i) => { if(chordNames.includes(n.name)) hits.push(i); });
+                        updateUI(hits);
 
-                        // --- 録音ロジック ---
                         if (isRecording) {
-                            // 現在のステップから4ステップ分（1小節）同じコードを敷き詰める（または先頭のみ）
-                            // 16ステップ制限があるため、16を越える場合はループさせる
                             const startStep = stepIdx % 16;
-                            currentChordHits.forEach(padIdx => {
+                            hits.forEach(padIdx => {
                                 if (!sequencerData[padIdx]) sequencerData[padIdx] = new Array(16).fill(false);
-                                // 先頭の1拍目に記録
                                 sequencerData[padIdx][startStep] = true;
                             });
-                            // シーケンサー画面を表示しているなら再描画
-                            if (!document.getElementById('view-sequencer').classList.contains('hidden')) {
-                                renderSequencer();
-                            }
+                            if (!document.getElementById('view-sequencer').classList.contains('hidden')) renderSequencer();
                         }
                     }
                     currentStep++;
@@ -796,30 +783,45 @@
             timer = setTimeout(runCycle, stepMs);
         }
 
+        /** Fixed MIDI Export Functionality **/
         function exportMIDI() {
-            const ticksPerBeat = 128;
+            const ticksPerBeat = 128; // Ticks per Quarter note
             const bpm = parseInt(bpmInput.value);
             
-            let track1 = [
+            // Initial Tempo and Track Setup
+            let trackEvents = [
                 { delta: 0, bytes: MidiEncoder.createTempo(bpm) },
                 { delta: 0, bytes: [0xFF, 0x03, 0x09, ...MidiEncoder.strToBytes('Sequencer')] }
             ];
 
-            let lastTick = 0;
+            // Build events in absolute time first, then convert to deltas
+            let absoluteEvents = [];
             for (let s = 0; s < 16; s++) {
-                const currentTick = s * ticksPerBeat;
+                const startTime = s * ticksPerBeat;
+                const endTime = startTime + Math.floor(ticksPerBeat * 0.8); // 80% duration for separation
+
                 Object.keys(sequencerData).forEach(idx => {
                     if (sequencerData[idx][s]) {
                         const note = padNotes[idx].midi;
-                        track1.push({ delta: currentTick - lastTick, bytes: MidiEncoder.createNoteOn(0, note, 90) });
-                        lastTick = currentTick;
-                        track1.push({ delta: ticksPerBeat - 10, bytes: MidiEncoder.createNoteOff(0, note, 0) });
-                        lastTick += (ticksPerBeat - 10);
+                        // Note ON
+                        absoluteEvents.push({ time: startTime, bytes: MidiEncoder.createNoteOn(0, note, 90) });
+                        // Note OFF
+                        absoluteEvents.push({ time: endTime, bytes: MidiEncoder.createNoteOff(0, note, 0) });
                     }
                 });
             }
 
-            const midiData = MidiEncoder.getMidiFile([track1], ticksPerBeat);
+            // Sort by absolute time to ensure correct MIDI sequence
+            absoluteEvents.sort((a, b) => a.time - b.time);
+
+            // Convert to Delta times
+            let lastTime = 0;
+            absoluteEvents.forEach(e => {
+                trackEvents.push({ delta: e.time - lastTime, bytes: e.bytes });
+                lastTime = e.time;
+            });
+
+            const midiData = MidiEncoder.getMidiFile([trackEvents], ticksPerBeat);
             const blob = new Blob([midiData], { type: 'audio/midi' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -902,7 +904,6 @@
             isRecording = !isRecording;
             if (isRecording) {
                 recBtn.classList.add('active-rec');
-                // 録音開始時にシーケンサーをクリアするかは任意だが、ここでは上書きするようにする
             } else {
                 recBtn.classList.remove('active-rec');
             }
