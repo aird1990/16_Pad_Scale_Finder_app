@@ -473,7 +473,6 @@
     </div>
 
     <script>
-        // API key handling is now moved to the server-side (/api/gemini)
         const padGrid = document.getElementById('pad-grid');
         const rootSelect = document.getElementById('root-note');
         const keyTypeSelect = document.getElementById('key-type');
@@ -553,7 +552,6 @@
         let audioCtx, masterGain, isPlaying = false, isSoundOn = false, isRecording = false, currentStep = 0, timer, sequencerData = {};
         let aiMode = 'scale';
 
-        /** MIDI Logic Fix: Correctly handling delta times for simultaneous notes **/
         const MidiEncoder = {
             numToVarLen(num) {
                 let bytes = [];
@@ -599,16 +597,20 @@
         };
 
         async function callGemini(prompt, systemPrompt, schema) {
-            // Updated to call local Vercel API endpoint
             const url = '/api/gemini'; 
             
+            // 明示的に parts 内にテキストを持たせる
             const payload = {
-                contents: [{ parts: [{ text: prompt }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: { responseMimeType: "application/json", responseSchema: schema }
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                systemInstruction: { role: "system", parts: [{ text: systemPrompt }] },
+                generationConfig: { 
+                    responseMimeType: "application/json", 
+                    responseSchema: schema,
+                    temperature: 0.7
+                }
             };
 
-            for (let i = 0; i < 5; i++) {
+            for (let i = 0; i < 3; i++) {
                 try {
                     const response = await fetch(url, {
                         method: 'POST',
@@ -617,23 +619,21 @@
                     });
                     
                     if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.error || `Server returned ${response.status}`);
+                        const errorData = await response.json();
+                        throw new Error(errorData.error?.message || errorData.error || `Server error: ${response.status}`);
                     }
 
                     const data = await response.json();
                     
-                    // The server proxies the Google API response structure
-                    if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
+                    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
                         return JSON.parse(data.candidates[0].content.parts[0].text);
                     } else {
-                        throw new Error("Invalid response format from Gemini API");
+                        throw new Error("No content received from AI");
                     }
                     
                 } catch (e) {
-                    console.error("Gemini API attempt " + (i + 1) + " failed:", e);
-                    if (i === 4) throw e;
-                    await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+                    if (i === 2) throw e;
+                    await new Promise(r => setTimeout(r, 1000));
                 }
             }
         }
@@ -801,38 +801,31 @@
             timer = setTimeout(runCycle, stepMs);
         }
 
-        /** Fixed MIDI Export Functionality **/
         function exportMIDI() {
-            const ticksPerBeat = 128; // Ticks per Quarter note
+            const ticksPerBeat = 128;
             const bpm = parseInt(bpmInput.value);
             
-            // Initial Tempo and Track Setup
             let trackEvents = [
                 { delta: 0, bytes: MidiEncoder.createTempo(bpm) },
                 { delta: 0, bytes: [0xFF, 0x03, 0x09, ...MidiEncoder.strToBytes('Sequencer')] }
             ];
 
-            // Build events in absolute time first, then convert to deltas
             let absoluteEvents = [];
             for (let s = 0; s < 16; s++) {
                 const startTime = s * ticksPerBeat;
-                const endTime = startTime + Math.floor(ticksPerBeat * 0.8); // 80% duration for separation
+                const endTime = startTime + Math.floor(ticksPerBeat * 0.8);
 
                 Object.keys(sequencerData).forEach(idx => {
                     if (sequencerData[idx][s]) {
                         const note = padNotes[idx].midi;
-                        // Note ON
                         absoluteEvents.push({ time: startTime, bytes: MidiEncoder.createNoteOn(0, note, 90) });
-                        // Note OFF
                         absoluteEvents.push({ time: endTime, bytes: MidiEncoder.createNoteOff(0, note, 0) });
                     }
                 });
             }
 
-            // Sort by absolute time to ensure correct MIDI sequence
             absoluteEvents.sort((a, b) => a.time - b.time);
 
-            // Convert to Delta times
             let lastTime = 0;
             absoluteEvents.forEach(e => {
                 trackEvents.push({ delta: e.time - lastTime, bytes: e.bytes });
