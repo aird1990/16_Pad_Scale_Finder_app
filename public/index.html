@@ -279,6 +279,20 @@
             border: 1px solid #222;
             overflow-y: auto;
             border-radius: 4px;
+            /* スクロールバーのカスタマイズ */
+            scrollbar-width: thin;
+            scrollbar-color: #333 #0a0a0a;
+        }
+        
+        #sequencer-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #sequencer-container::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        #sequencer-container::-webkit-scrollbar-thumb {
+            background-color: #333;
+            border-radius: 4px;
         }
 
         .seq-row {
@@ -298,6 +312,11 @@
             color: var(--accent-green);
             border-right: 2px solid #222;
             flex-shrink: 0;
+        }
+        
+        .seq-key.out-of-scale {
+            color: #444; /* スケール外のノートの色 */
+            background-color: #151515;
         }
 
         .seq-key.root { background-color: #1a2a1a; }
@@ -376,10 +395,26 @@
         </div>
 
         <div id="view-sequencer" class="view-panel hidden">
+            <!-- View Mode Toggle & Clear -->
+            <div class="flex justify-between items-center mb-2">
+                <div class="label-small text-gray-500">SEQUENCE EDITOR</div>
+                <div class="flex gap-3">
+                    <!-- Clear Button with confirmation state -->
+                    <button id="clear-seq-btn" class="group flex items-center gap-1 text-[9px] px-2 py-1 rounded border border-[#333] hover:border-red-500 transition-all min-w-[70px] justify-center">
+                        <span id="clear-btn-text" class="text-gray-500 group-hover:text-red-400 font-bold uppercase">🗑️ CLEAR</span>
+                    </button>
+
+                    <div class="flex bg-black/40 rounded p-1 gap-1 border border-[#333]">
+                        <button id="seq-mode-scale" class="text-[9px] px-3 py-1 rounded bg-[#333] text-white font-bold transition-colors">SCALE</button>
+                        <button id="seq-mode-chromatic" class="text-[9px] px-3 py-1 rounded text-[#666] font-bold hover:text-[#999] transition-colors">CHROMATIC</button>
+                    </div>
+                </div>
+            </div>
+            
             <div id="sequencer-container"></div>
+            
             <div class="mt-2 flex justify-between items-center">
                 <div class="label-small text-[9px] text-gray-500">PROG モードで REC を押すと再生内容がここに書き込まれます</div>
-                <button id="clear-seq" class="text-[10px] text-gray-500 hover:text-white uppercase font-bold">Clear All Steps</button>
             </div>
         </div>
 
@@ -461,14 +496,14 @@
 
     <!-- AI Prompt Modal -->
     <div id="ai-modal" class="hidden">
-        <div class="bg-[#1a1a1a] p-8 rounded-xl border border-[#333] w-96">
+        <div class="bg-[#1a1a1a] p-8 rounded-xl border border-[#333] w-96 max-w-[90%] shadow-2xl">
             <h2 id="ai-modal-title" class="text-lg font-bold mb-4 text-purple-400">✨ AI生成</h2>
             <input type="text" id="ai-input" placeholder="例: 切ない、チル、Lo-fi..." class="mb-4">
             <div class="flex gap-2">
                 <button id="ai-submit" class="ai-btn flex-grow">生成開始</button>
                 <button id="ai-close" class="btn flex-grow">閉じる</button>
             </div>
-            <p id="ai-status" class="text-[10px] text-gray-500 mt-4 italic"></p>
+            <p id="ai-status" class="text-[10px] text-gray-500 mt-4 italic text-center min-h-[15px]"></p>
         </div>
     </div>
 
@@ -499,6 +534,11 @@
         const aiClose = document.getElementById('ai-close');
         const aiStatus = document.getElementById('ai-status');
         const aiModalTitle = document.getElementById('ai-modal-title');
+        
+        // Sequencer view mode controls
+        const btnSeqScale = document.getElementById('seq-mode-scale');
+        const btnSeqChrom = document.getElementById('seq-mode-chromatic');
+        let sequencerViewMode = 'scale'; 
 
         let currentLang = 'ja';
 
@@ -596,13 +636,14 @@
             }
         };
 
+        // --- Modified for Canvas Environment ---
         async function callGemini(prompt, systemPrompt, schema) {
-            const url = '/api/gemini'; 
             
-            // 明示的に parts 内にテキストを持たせる
+            const url = `api/gemini`;
+            
             const payload = {
                 contents: [{ role: "user", parts: [{ text: prompt }] }],
-                systemInstruction: { role: "system", parts: [{ text: systemPrompt }] },
+                systemInstruction: { parts: [{ text: systemPrompt }] },
                 generationConfig: { 
                     responseMimeType: "application/json", 
                     responseSchema: schema,
@@ -610,30 +651,21 @@
                 }
             };
 
-            for (let i = 0; i < 3; i++) {
+            for (let i = 0; i < 5; i++) {
                 try {
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error?.message || errorData.error || `Server error: ${response.status}`);
-                    }
-
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                     const data = await response.json();
-                    
                     if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
                         return JSON.parse(data.candidates[0].content.parts[0].text);
-                    } else {
-                        throw new Error("No content received from AI");
-                    }
-                    
+                    } else throw new Error("No content");
                 } catch (e) {
-                    if (i === 2) throw e;
-                    await new Promise(r => setTimeout(r, 1000));
+                    if (i === 4) throw e;
+                    await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
                 }
             }
         }
@@ -708,12 +740,13 @@
 
             [...padNotes].reverse().forEach((note, revIdx) => {
                 const realIdx = 15 - revIdx;
-                if (!scaleNotes.includes(note.name)) return;
+                const isInScale = scaleNotes.includes(note.name);
+                if (sequencerViewMode === 'scale' && !isInScale) return;
 
                 const row = document.createElement('div');
                 row.className = 'seq-row';
                 const key = document.createElement('div');
-                key.className = `seq-key ${note.name === root ? 'root' : ''}`;
+                key.className = `seq-key ${note.name === root ? 'root' : ''} ${!isInScale ? 'out-of-scale' : ''}`;
                 key.textContent = note.fullName;
                 row.appendChild(key);
 
@@ -736,6 +769,19 @@
                 seqContainer.appendChild(row);
             });
         }
+        
+        function updateSeqModeUI() {
+            if (sequencerViewMode === 'scale') {
+                btnSeqScale.classList.add('bg-[#333]', 'text-white');
+                btnSeqChrom.classList.remove('bg-[#333]', 'text-white');
+            } else {
+                btnSeqChrom.classList.add('bg-[#333]', 'text-white');
+                btnSeqScale.classList.remove('bg-[#333]', 'text-white');
+            }
+        }
+        
+        btnSeqScale.onclick = () => { sequencerViewMode = 'scale'; updateSeqModeUI(); renderSequencer(); };
+        btnSeqChrom.onclick = () => { sequencerViewMode = 'chromatic'; updateSeqModeUI(); renderSequencer(); };
 
         function runCycle() {
             if (!isPlaying) return;
@@ -744,11 +790,8 @@
             
             const cells = seqContainer.querySelectorAll('.seq-cell');
             cells.forEach(cell => {
-                if (parseInt(cell.dataset.stepIndex) === (currentStep % 16)) {
-                    cell.classList.add('current');
-                } else {
-                    cell.classList.remove('current');
-                }
+                if (parseInt(cell.dataset.stepIndex) === (currentStep % 16)) cell.classList.add('current');
+                else cell.classList.remove('current');
             });
 
             if (modeSelect.value === 'scale') {
@@ -770,20 +813,16 @@
                 if (prog) {
                     const loopSteps = prog.degrees.length * 4;
                     const stepIdx = currentStep % loopSteps;
-
                     if (stepIdx % 4 === 0) {
                         const measureIdx = Math.floor(stepIdx / 4);
                         const progIdx = measureIdx % prog.degrees.length;
                         const rootIdx = chromaticNotes.indexOf(rootSelect.value);
                         const chordNames = prog.degrees[progIdx].map(i => chromaticNotes[(rootIdx + i) % 12]);
-                        
                         chordNames.forEach((n, i) => playSound(getFreq(n, i === 0 ? 3 : 4)));
                         statusLabel.textContent = `CHORD: ${prog.labels[progIdx]}`;
-                        
                         const hits = [];
                         padNotes.forEach((n, i) => { if(chordNames.includes(n.name)) hits.push(i); });
                         updateUI(hits);
-
                         if (isRecording) {
                             const startStep = stepIdx % 16;
                             hits.forEach(padIdx => {
@@ -794,9 +833,7 @@
                         }
                     }
                     currentStep++;
-                } else {
-                    currentStep = (currentStep + 1) % 16;
-                }
+                } else currentStep = (currentStep + 1) % 16;
             }
             timer = setTimeout(runCycle, stepMs);
         }
@@ -804,17 +841,14 @@
         function exportMIDI() {
             const ticksPerBeat = 128;
             const bpm = parseInt(bpmInput.value);
-            
             let trackEvents = [
                 { delta: 0, bytes: MidiEncoder.createTempo(bpm) },
                 { delta: 0, bytes: [0xFF, 0x03, 0x09, ...MidiEncoder.strToBytes('Sequencer')] }
             ];
-
             let absoluteEvents = [];
             for (let s = 0; s < 16; s++) {
                 const startTime = s * ticksPerBeat;
                 const endTime = startTime + Math.floor(ticksPerBeat * 0.8);
-
                 Object.keys(sequencerData).forEach(idx => {
                     if (sequencerData[idx][s]) {
                         const note = padNotes[idx].midi;
@@ -823,22 +857,17 @@
                     }
                 });
             }
-
             absoluteEvents.sort((a, b) => a.time - b.time);
-
             let lastTime = 0;
             absoluteEvents.forEach(e => {
                 trackEvents.push({ delta: e.time - lastTime, bytes: e.bytes });
                 lastTime = e.time;
             });
-
             const midiData = MidiEncoder.getMidiFile([trackEvents], ticksPerBeat);
             const blob = new Blob([midiData], { type: 'audio/midi' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `pad_finder_${Date.now()}.mid`;
-            a.click();
+            a.href = url; a.download = `pad_finder_${Date.now()}.mid`; a.click();
             URL.revokeObjectURL(url);
         }
 
@@ -872,8 +901,7 @@
                 }
                 aiModal.classList.add('hidden');
             } catch (e) { 
-                console.error(e);
-                aiStatus.textContent = "Failed: " + e.message; 
+                console.error(e); aiStatus.textContent = "Failed: " + e.message; 
             } finally { aiSubmit.disabled = false; updateUI(); }
         }
 
@@ -884,43 +912,27 @@
 
         playBtn.onclick = () => {
             initAudio();
-            if (isPlaying) {
-                isPlaying = false; playBtn.textContent = 'RESUME'; statusLabel.textContent = 'PAUSED'; clearTimeout(timer);
-            } else {
-                isPlaying = true; playBtn.textContent = 'PAUSE'; statusLabel.textContent = 'RUNNING'; runCycle();
-            }
+            if (isPlaying) { isPlaying = false; playBtn.textContent = 'RESUME'; statusLabel.textContent = 'PAUSED'; clearTimeout(timer); } 
+            else { isPlaying = true; playBtn.textContent = 'PAUSE'; statusLabel.textContent = 'RUNNING'; runCycle(); }
         };
 
         stopBtn.onclick = () => {
-            isPlaying = false; 
-            currentStep = 0; 
-            playBtn.textContent = 'PLAY'; 
-            statusLabel.textContent = 'STOPPED'; 
-            clearTimeout(timer);
+            isPlaying = false; currentStep = 0; playBtn.textContent = 'PLAY'; statusLabel.textContent = 'STOPPED'; clearTimeout(timer);
             const cells = seqContainer.querySelectorAll('.seq-cell');
             cells.forEach(cell => cell.classList.remove('current'));
             updateUI();
         };
 
         soundToggle.onclick = () => {
-            initAudio(); 
-            isSoundOn = !isSoundOn;
-            if (isSoundOn) {
-                soundToggle.classList.add('active-green');
-                soundToggle.innerHTML = `<span id="sound-icon">🔊</span> SOUND ON`;
-            } else {
-                soundToggle.classList.remove('active-green');
-                soundToggle.innerHTML = `<span id="sound-icon">🔈</span> SOUND OFF`;
-            }
+            initAudio(); isSoundOn = !isSoundOn;
+            if (isSoundOn) { soundToggle.classList.add('active-green'); soundToggle.innerHTML = `🔊 SOUND ON`; } 
+            else { soundToggle.classList.remove('active-green'); soundToggle.innerHTML = `🔈 SOUND OFF`; }
         };
 
         recBtn.onclick = () => {
             isRecording = !isRecording;
-            if (isRecording) {
-                recBtn.classList.add('active-rec');
-            } else {
-                recBtn.classList.remove('active-rec');
-            }
+            if (isRecording) recBtn.classList.add('active-rec');
+            else recBtn.classList.remove('active-rec');
         };
 
         exportBtn.onclick = exportMIDI;
@@ -938,13 +950,13 @@
             if (mode === 'scale') {
                 const opt = document.createElement('option');
                 const s = scales[key] || scales.major;
-                opt.textContent = (s.name && s.name[currentLang]) ? s.name[currentLang] : (s.name || 'Scale');
+                opt.textContent = s.name[currentLang] || s.name;
                 subSelect.appendChild(opt);
             } else {
                 const progs = progressions[key] || progressions.major;
                 Object.keys(progs).forEach(k => {
                     const opt = document.createElement('option'); opt.value = k;
-                    opt.textContent = (progs[k].name && progs[k].name[currentLang]) ? progs[k].name[currentLang] : (progs[k].name || k);
+                    opt.textContent = progs[k].name[currentLang] || progs[k].name;
                     subSelect.appendChild(opt);
                 });
             }
@@ -962,7 +974,52 @@
             };
         });
 
-        document.getElementById('clear-seq').onclick = () => { sequencerData = {}; renderSequencer(); };
+        // --- FIXED CLEAR LOGIC (Using Inline Confirmation State) ---
+        let clearConfirmState = false;
+        let clearTimer = null;
+        const clearBtn = document.getElementById('clear-seq-btn');
+        const clearBtnText = document.getElementById('clear-btn-text');
+
+        clearBtn.onclick = () => {
+            const hasData = Object.keys(sequencerData).some(k => sequencerData[k].some(s => s));
+            
+            if (!hasData) {
+                clearBtnText.innerText = "❌ NO DATA";
+                setTimeout(() => { clearBtnText.innerText = "🗑️ CLEAR"; }, 1500);
+                return;
+            }
+
+            if (!clearConfirmState) {
+                // First click: Request confirmation
+                clearConfirmState = true;
+                clearBtnText.innerText = "⚠️ ARE YOU SURE?";
+                clearBtnText.classList.add('text-red-400');
+                
+                // Reset if not clicked again within 3 seconds
+                if (clearTimer) clearTimeout(clearTimer);
+                clearTimer = setTimeout(() => {
+                    clearConfirmState = false;
+                    clearBtnText.innerText = "🗑️ CLEAR";
+                    clearBtnText.classList.remove('text-red-400');
+                }, 3000);
+            } else {
+                // Second click: Perform clear
+                sequencerData = {};
+                renderSequencer();
+                
+                clearConfirmState = false;
+                if (clearTimer) clearTimeout(clearTimer);
+                clearBtnText.innerText = "✨ CLEARED!";
+                clearBtnText.classList.remove('text-red-400');
+                clearBtnText.classList.add('text-green-400');
+                
+                setTimeout(() => {
+                    clearBtnText.innerText = "🗑️ CLEAR";
+                    clearBtnText.classList.remove('text-green-400');
+                }, 1500);
+            }
+        };
+        
         updateSubOptions();
     </script>
 </body>
