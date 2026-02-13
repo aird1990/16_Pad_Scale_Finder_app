@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pad Scale Finder</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -25,28 +25,51 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            overflow: hidden;
+            overflow: hidden; /* Prevent body scroll, handle inside container */
+            touch-action: manipulation;
+        }
+
+        /* カスタムスクロールバー */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
         }
 
         .mpc-container {
             background-color: var(--container-bg);
             border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 32px;
             box-shadow: 0 30px 60px rgba(0,0,0,0.8);
-            width: 95%;
-            max-width: 900px;
-            height: 96vh;
-            max-height: 1100px;
             display: flex;
             flex-direction: column;
+            width: 100%;
+            height: 100dvh; /* モバイルのアドレスバー対策 */
+            padding: 16px;
+        }
+
+        @media (min-width: 768px) {
+            .mpc-container {
+                width: 95%;
+                max-width: 900px;
+                height: 96vh;
+                max-height: 1100px;
+                border-radius: 16px;
+                padding: 32px;
+            }
         }
 
         .header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
+            flex-shrink: 0;
         }
 
         .status-area {
@@ -55,8 +78,8 @@
 
         .label-small {
             font-size: 10px;
-            color: #666;
-            letter-spacing: 2px;
+            color: #888;
+            letter-spacing: 1px;
             text-transform: uppercase;
         }
 
@@ -73,9 +96,14 @@
 
         .bpm-value {
             color: var(--accent-green);
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 800;
             line-height: 1;
+        }
+
+        @media (min-width: 768px) {
+            .bpm-value { font-size: 28px; }
+            .header { margin-bottom: 24px; }
         }
 
         .view-panel {
@@ -83,14 +111,21 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-height: 0; /* Flexbox overflow fix */
         }
 
         .pad-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
+            gap: 8px;
             flex-grow: 1;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
+            /* Gridの高さを確保 */
+            height: 100%; 
+        }
+
+        @media (min-width: 768px) {
+            .pad-grid { gap: 16px; margin-bottom: 24px; }
         }
 
         .pad {
@@ -102,78 +137,101 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.15s ease;
-            box-shadow: 4px 4px 10px rgba(0,0,0,0.4);
+            transition: all 0.1s ease; /* 反応速度向上のため少し短く */
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.4);
             user-select: none;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .pad-id {
             position: absolute;
-            top: 8px;
-            left: 8px;
-            font-size: 10px;
+            top: 4px;
+            left: 4px;
+            font-size: 8px;
             color: #555;
         }
 
         .pad-note {
-            font-size: 24px;
+            font-size: 18px;
             font-weight: 700;
             color: #eee;
+            pointer-events: none;
+        }
+
+        @media (min-width: 768px) {
+            .pad-id { top: 8px; left: 8px; font-size: 10px; }
+            .pad-note { font-size: 24px; }
+            .pad { box-shadow: 4px 4px 10px rgba(0,0,0,0.4); }
         }
 
         .pad.active {
             border: 2px solid var(--accent-red);
-            box-shadow: 0 0 15px rgba(255, 59, 59, 0.4), inset 0 0 8px rgba(255, 59, 59, 0.2);
+            box-shadow: 0 0 10px rgba(255, 59, 59, 0.4), inset 0 0 8px rgba(255, 59, 59, 0.2);
         }
 
         .pad.playing {
             background: #ff3b3b;
             color: white;
-            transform: scale(0.95);
+            transform: scale(0.96);
         }
 
-        .controls-grid {
+        /* Controls Area Styles */
+        .controls-area {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: rgba(0,0,0,0.2);
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #222;
+        }
+
+        .controls-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 8px;
         }
 
         .ai-controls {
             display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-shrink: 0;
         }
 
         .ai-btn {
             flex: 1;
             background: linear-gradient(135deg, #4f46e5, #9333ea);
             border: none;
-            padding: 10px;
+            padding: 8px;
             border-radius: 6px;
             font-size: 11px;
             font-weight: bold;
             color: white;
             cursor: pointer;
-            transition: opacity 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 4px;
+            white-space: nowrap;
         }
 
-        .ai-btn:hover { opacity: 0.9; }
-        .ai-btn:disabled { background: #333; cursor: not-allowed; }
+        .ai-btn:active { opacity: 0.8; }
+        .ai-btn:disabled { background: #333; opacity: 0.5; }
 
+        /* Inputs & Selects */
         select, input[type="number"], input[type="text"] {
             background-color: #111;
             color: #fff;
             border: 1px solid #333;
-            padding: 12px;
+            padding: 8px;
             border-radius: 4px;
-            font-size: 14px;
+            font-size: 14px; /* iOS zoom prevention */
             width: 100%;
             outline: none;
+            height: 36px;
         }
 
         .input-with-label {
@@ -182,90 +240,94 @@
             background: #111;
             border: 1px solid #333;
             border-radius: 4px;
-            padding: 0 12px;
+            padding: 0 8px;
+            height: 36px;
         }
 
         .input-label {
             font-size: 10px;
             color: #666;
-            margin-right: 8px;
+            margin-right: 6px;
+            white-space: nowrap;
         }
 
         input[type="range"] {
             accent-color: var(--accent-red);
             flex-grow: 1;
+            height: 20px;
         }
 
         .action-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 12px;
-            margin-top: 12px;
+            gap: 8px;
         }
 
         .btn {
             background-color: #333;
             color: #fff;
-            padding: 14px;
+            padding: 10px;
             border-radius: 4px;
             text-align: center;
             font-weight: bold;
             text-transform: uppercase;
-            font-size: 12px;
+            font-size: 11px;
             cursor: pointer;
-            transition: background 0.2s;
             border: 1px solid #444;
             display: flex;
             align-items: center;
             justify-content: center;
+            user-select: none;
+            touch-action: manipulation;
         }
 
-        .btn:hover { background-color: #444; }
+        .btn:active { background-color: #444; transform: translateY(1px); }
 
         #sound-toggle.active-green {
             background-color: var(--accent-green-bright) !important;
             color: #000000 !important;
             border-color: #ffffff !important;
-            box-shadow: 0 0 15px rgba(57, 255, 20, 0.7) !important;
-            font-weight: 800 !important;
+            box-shadow: 0 0 10px rgba(57, 255, 20, 0.5) !important;
         }
 
         #rec-btn.active-rec {
             background-color: var(--accent-red) !important;
             color: #fff !important;
             border-color: #fff !important;
-            box-shadow: 0 0 15px rgba(255, 59, 59, 0.7) !important;
+            box-shadow: 0 0 10px rgba(255, 59, 59, 0.5) !important;
             animation: pulse 1s infinite;
         }
 
         @keyframes pulse {
             0% { opacity: 1; }
-            50% { opacity: 0.6; }
+            50% { opacity: 0.7; }
             100% { opacity: 1; }
         }
         
         .btn-blue { background-color: #2563eb; border-color: #1d4ed8; }
-        .btn-blue:hover { background-color: #1d4ed8; }
+        .btn-blue:active { background-color: #1d4ed8; }
 
         .nav-tabs {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 4px;
-            margin-top: 24px;
+            margin-top: 12px;
             padding: 4px;
             background-color: #000;
             border-radius: 8px;
+            flex-shrink: 0;
         }
 
         .tab {
-            padding: 12px;
+            padding: 10px;
             text-align: center;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: bold;
             text-transform: uppercase;
             color: #666;
             cursor: pointer;
             border-radius: 4px;
+            white-space: nowrap;
         }
 
         .tab.active {
@@ -273,49 +335,44 @@
             color: #fff;
         }
 
+        /* Sequencer Styles */
         #sequencer-container {
             flex-grow: 1;
             background-color: #0a0a0a;
             border: 1px solid #222;
-            overflow-y: auto;
+            overflow: auto; /* Enable scrolling both ways if needed */
             border-radius: 4px;
-            /* スクロールバーのカスタマイズ */
-            scrollbar-width: thin;
-            scrollbar-color: #333 #0a0a0a;
-        }
-        
-        #sequencer-container::-webkit-scrollbar {
-            width: 8px;
-        }
-        #sequencer-container::-webkit-scrollbar-track {
-            background: #0a0a0a;
-        }
-        #sequencer-container::-webkit-scrollbar-thumb {
-            background-color: #333;
-            border-radius: 4px;
+            position: relative;
+            /* Smooth scrolling on iOS */
+            -webkit-overflow-scrolling: touch; 
         }
 
         .seq-row {
             display: flex;
-            height: 40px;
+            height: 36px;
             border-bottom: 1px solid #1a1a1a;
+            width: max-content; /* Ensure row expands to fit cells */
+            min-width: 100%;
         }
 
         .seq-key {
-            width: 80px;
+            width: 60px;
             background-color: #111;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
             color: var(--accent-green);
             border-right: 2px solid #222;
             flex-shrink: 0;
+            position: sticky; /* Make keys stick to left */
+            left: 0;
+            z-index: 10;
         }
         
         .seq-key.out-of-scale {
-            color: #444; /* スケール外のノートの色 */
+            color: #444; 
             background-color: #151515;
         }
 
@@ -323,25 +380,24 @@
 
         .seq-grid {
             display: flex;
-            flex-grow: 1;
         }
 
         .seq-cell {
-            flex: 1;
+            width: 36px; /* Fixed width for better touch targets */
             border-right: 1px solid #1a1a1a;
             cursor: pointer;
             position: relative;
+            flex-shrink: 0;
         }
 
         .seq-cell.active { 
             background-color: var(--accent-green) !important; 
             box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.4), 0 0 3px rgba(0, 255, 0, 0.6);
-            z-index: 10;
         }
         
         .seq-cell.current { 
-            background-color: rgba(255, 255, 255, 0.2) !important; 
-            box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.8);
+            background-color: rgba(255, 255, 255, 0.15) !important; 
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
         }
         
         .seq-cell.active.current {
@@ -351,10 +407,10 @@
         
         .seq-cell.measure-alt { background-color: #252525; }
         .seq-cell:not(.measure-alt) { background-color: #1a1a1a; }
-        .seq-cell:hover { opacity: 0.7; }
 
         .hidden { display: none !important; }
 
+        /* Modal */
         #ai-modal {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -363,7 +419,22 @@
             align-items: center;
             justify-content: center;
             z-index: 1000;
+            padding: 20px;
         }
+
+        @media (min-width: 768px) {
+            .controls-row { grid-template-columns: 1fr 1fr; gap: 12px; }
+            .action-buttons { gap: 12px; }
+            .btn { padding: 14px; font-size: 12px; }
+            .seq-key { width: 80px; font-size: 12px; }
+            .seq-row { height: 40px; }
+            .seq-cell { flex: 1; width: auto; } /* PCでは伸縮 */
+            .seq-grid { flex-grow: 1; width: 100%; }
+        }
+        
+        /* Utility classes for mobile grid */
+        .grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
     </style>
 </head>
 <body>
@@ -373,19 +444,19 @@
         <div class="header">
             <div class="status-area">
                 <div class="flex items-center gap-2 mb-1">
-                    <span class="label-small">NAVIGATOR</span>
+                    <span class="label-small hidden md:inline">NAVIGATOR</span>
                     <button id="sound-toggle" class="btn text-[10px] font-bold px-3 py-1 flex items-center gap-1 transition-all duration-300">
-                        <span id="sound-icon">🔈</span> SOUND OFF
+                        <span id="sound-icon">🔈</span> <span class="hidden xs:inline">SOUND</span> OFF
                     </button>
                     <button id="rec-btn" class="btn text-[10px] font-bold px-3 py-1 flex items-center gap-1 transition-all duration-300">
                         <span class="w-2 h-2 rounded-full bg-red-600"></span> REC
                     </button>
                 </div>
-                <div id="status-label" class="status-text uppercase tracking-widest">STOPPED</div>
+                <div id="status-label" class="status-text uppercase tracking-widest text-xs md:text-sm">STOPPED</div>
             </div>
             <div class="bpm-display">
-                <div id="bpm-val" class="bpm-value">120 BPM</div>
-                <div class="label-small">STEP SEQUENCER (1 Bar = 4 Steps)</div>
+                <div id="bpm-val" class="bpm-value">120</div>
+                <div class="label-small">BPM</div>
             </div>
         </div>
 
@@ -396,25 +467,24 @@
 
         <div id="view-sequencer" class="view-panel hidden">
             <!-- View Mode Toggle & Clear -->
-            <div class="flex justify-between items-center mb-2">
-                <div class="label-small text-gray-500">SEQUENCE EDITOR</div>
-                <div class="flex gap-3">
-                    <!-- Clear Button (New) -->
-                    <button id="clear-seq-btn" class="group flex items-center gap-1 text-[9px] px-2 py-1 rounded border border-[#333] hover:border-red-500 transition-all min-w-[70px] justify-center">
-                        <span id="clear-btn-text" class="text-gray-500 group-hover:text-red-400 font-bold uppercase">🗑️ CLEAR</span>
+            <div class="flex justify-between items-center mb-2 flex-shrink-0">
+                <div class="label-small text-gray-500">SEQ EDITOR</div>
+                <div class="flex gap-2">
+                    <button id="clear-seq-btn" class="group flex items-center gap-1 text-[9px] px-2 py-1 rounded border border-[#333] hover:border-red-500 transition-all min-w-[60px] justify-center bg-[#222]">
+                        <span id="clear-btn-text" class="text-gray-400 group-hover:text-red-400 font-bold uppercase">🗑️ CLEAR</span>
                     </button>
 
                     <div class="flex bg-black/40 rounded p-1 gap-1 border border-[#333]">
-                        <button id="seq-mode-scale" class="text-[9px] px-3 py-1 rounded bg-[#333] text-white font-bold transition-colors">SCALE</button>
-                        <button id="seq-mode-chromatic" class="text-[9px] px-3 py-1 rounded text-[#666] font-bold hover:text-[#999] transition-colors">CHROMATIC</button>
+                        <button id="seq-mode-scale" class="text-[9px] px-2 py-1 rounded bg-[#333] text-white font-bold transition-colors">SCALE</button>
+                        <button id="seq-mode-chromatic" class="text-[9px] px-2 py-1 rounded text-[#666] font-bold hover:text-[#999] transition-colors">ALL</button>
                     </div>
                 </div>
             </div>
             
             <div id="sequencer-container"></div>
             
-            <div class="mt-2 flex justify-between items-center">
-                <div class="label-small text-[9px] text-gray-500">PROG モードで REC を押すと再生内容がここに書き込まれます</div>
+            <div class="mt-2 flex justify-between items-center flex-shrink-0">
+                <div class="label-small text-[9px] text-gray-500">PROGモード再生中にRECで書き込み</div>
             </div>
         </div>
 
@@ -428,18 +498,21 @@
                         <option value="en">English</option>
                     </select>
                 </div>
+                <div class="mt-4 text-xs text-gray-500">
+                    <p>Version: 1.1 Mobile Optimized</p>
+                </div>
             </div>
         </div>
 
         <!-- AI Integration Area -->
         <div class="ai-controls">
-            <button id="ai-scale-btn" class="ai-btn">✨ AIスケール提案</button>
-            <button id="ai-prog-btn" class="ai-btn">✨ AI進行生成</button>
+            <button id="ai-scale-btn" class="ai-btn">✨ AI Scale</button>
+            <button id="ai-prog-btn" class="ai-btn">✨ AI Prog</button>
         </div>
 
         <!-- Lower Controls -->
         <div class="controls-area">
-            <div class="controls-grid">
+            <div class="controls-row">
                 <select id="root-note">
                     <option value="C">Root: C</option>
                     <option value="C#">Root: C# / Db</option>
@@ -460,7 +533,7 @@
                 </select>
             </div>
 
-            <div class="controls-grid">
+            <div class="controls-row">
                 <div class="input-with-label">
                     <span class="input-label">BPM</span>
                     <input type="number" id="bpm-input" value="120" min="40" max="240">
@@ -471,34 +544,34 @@
                 </div>
             </div>
 
-            <div class="controls-grid">
+            <div class="controls-row">
                 <select id="mode-selector">
                     <option value="scale">Mode: Scale</option>
-                    <option value="progression">Mode: Progression</option>
+                    <option value="progression">Mode: Prog</option>
                 </select>
-                <select id="sub-selector"></select>
+                <select id="sub-selector" class="text-ellipsis overflow-hidden"></select>
             </div>
 
             <div class="action-buttons">
                 <div id="play-btn" class="btn">PLAY</div>
                 <div id="stop-btn" class="btn">STOP</div>
-                <div id="export-btn" class="btn btn-blue">EXPORT MIDI</div>
+                <div id="export-btn" class="btn btn-blue">MIDI</div>
             </div>
         </div>
 
         <!-- Navigation Tabs -->
         <div class="nav-tabs" id="nav-tabs">
             <div class="tab active" data-view="pads">PADS</div>
-            <div class="tab" data-view="sequencer">SEQUENCER</div>
-            <div class="tab" data-view="settings">SETTINGS</div>
+            <div class="tab" data-view="sequencer">SEQ</div>
+            <div class="tab" data-view="settings">SETUP</div>
         </div>
     </div>
 
     <!-- AI Prompt Modal -->
     <div id="ai-modal" class="hidden">
-        <div class="bg-[#1a1a1a] p-8 rounded-xl border border-[#333] w-96 max-w-[90%] shadow-2xl">
+        <div class="bg-[#1a1a1a] p-6 rounded-xl border border-[#333] w-full max-w-sm shadow-2xl">
             <h2 id="ai-modal-title" class="text-lg font-bold mb-4 text-purple-400">✨ AI生成</h2>
-            <input type="text" id="ai-input" placeholder="例: 切ない、チル、Lo-fi..." class="mb-4">
+            <input type="text" id="ai-input" placeholder="例: 切ない、チル、Lo-fi..." class="mb-4 w-full">
             <div class="flex gap-2">
                 <button id="ai-submit" class="ai-btn flex-grow">生成開始</button>
                 <button id="ai-close" class="btn flex-grow">閉じる</button>
@@ -706,6 +779,7 @@
             const scaleNotes = currentScale.intervals.map(i => chromaticNotes[(chromaticNotes.indexOf(root) + i) % 12]);
 
             padGrid.innerHTML = '';
+            // For responsive grid, we might change order or just keep it simple
             const layoutOrder = [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3];
 
             layoutOrder.forEach((i, visualIdx) => {
@@ -749,7 +823,7 @@
                 row.className = 'seq-row';
                 
                 const key = document.createElement('div');
-                // Add 'out-of-scale' class if note is not in current scale (for chromatic mode visual distinction)
+                // Add 'out-of-scale' class if note is not in current scale
                 key.className = `seq-key ${note.name === root ? 'root' : ''} ${!isInScale ? 'out-of-scale' : ''}`;
                 key.textContent = note.fullName;
                 row.appendChild(key);
@@ -840,7 +914,6 @@
                         const rootIdx = chromaticNotes.indexOf(rootSelect.value);
                         const chordNames = prog.degrees[progIdx].map(i => chromaticNotes[(rootIdx + i) % 12]);
                         
-                        // スマートボイシング: ルート音を基準に、最も近いパッドを選定
                         const hits = [];
                         let rootPadIndex = padNotes.findIndex(p => p.name === chordNames[0]);
                         
@@ -850,7 +923,6 @@
                                 return;
                             }
                             
-                            // ルート音より上の範囲で、最も近いパッドを探す
                             let foundIndex = -1;
                             for (let i = rootPadIndex + 1; i < padNotes.length; i++) {
                                 if (padNotes[i].name === noteName) {
@@ -859,7 +931,6 @@
                                 }
                             }
                             
-                            // 見つからない場合は、先頭から検索（転回形になるが、弾ける範囲内で確保）
                             if (foundIndex === -1) {
                                 foundIndex = padNotes.findIndex(p => p.name === noteName);
                             }
@@ -869,7 +940,6 @@
                             }
                         });
 
-                        // 確定したパッドのみを鳴らす
                         hits.forEach(idx => playSound(getFreq(padNotes[idx].name, padNotes[idx].octave)));
                         
                         statusLabel.textContent = `CHORD: ${prog.labels[progIdx]}`;
@@ -881,6 +951,7 @@
                                 if (!sequencerData[padIdx]) sequencerData[padIdx] = new Array(16).fill(false);
                                 sequencerData[padIdx][startStep] = true;
                             });
+                            // Only rerender if visible to save performance
                             if (!document.getElementById('view-sequencer').classList.contains('hidden')) renderSequencer();
                         }
                     }
@@ -998,10 +1069,10 @@
             isSoundOn = !isSoundOn;
             if (isSoundOn) {
                 soundToggle.classList.add('active-green');
-                soundToggle.innerHTML = `<span id="sound-icon">🔊</span> SOUND ON`;
+                soundToggle.innerHTML = `<span id="sound-icon">🔊</span> <span class="hidden xs:inline">SOUND</span> ON`;
             } else {
                 soundToggle.classList.remove('active-green');
-                soundToggle.innerHTML = `<span id="sound-icon">🔈</span> SOUND OFF`;
+                soundToggle.innerHTML = `<span id="sound-icon">🔈</span> <span class="hidden xs:inline">SOUND</span> OFF`;
             }
         };
 
@@ -1016,7 +1087,7 @@
 
         exportBtn.onclick = exportMIDI;
         volumeFader.oninput = () => { if(masterGain) masterGain.gain.value = volumeFader.value; };
-        bpmInput.oninput = () => bpmDisplay.textContent = `${bpmInput.value} BPM`;
+        bpmInput.oninput = () => bpmDisplay.textContent = `${bpmInput.value}`;
         modeSelect.onchange = updateSubOptions;
         keyTypeSelect.onchange = updateSubOptions;
         rootSelect.onchange = () => { currentStep = 0; updateUI(); renderSequencer(); };
@@ -1069,12 +1140,10 @@
             }
 
             if (!clearConfirmState) {
-                // First click: Request confirmation
                 clearConfirmState = true;
-                clearBtnText.innerText = "⚠️ ARE YOU SURE?";
+                clearBtnText.innerText = "⚠️ SURE?";
                 clearBtnText.classList.add('text-red-400');
                 
-                // Reset if not clicked again within 3 seconds
                 if (clearTimer) clearTimeout(clearTimer);
                 clearTimer = setTimeout(() => {
                     clearConfirmState = false;
@@ -1082,13 +1151,12 @@
                     clearBtnText.classList.remove('text-red-400');
                 }, 3000);
             } else {
-                // Second click: Perform clear
                 sequencerData = {};
                 renderSequencer();
                 
                 clearConfirmState = false;
                 if (clearTimer) clearTimeout(clearTimer);
-                clearBtnText.innerText = "✨ CLEARED!";
+                clearBtnText.innerText = "✨ CLEARED";
                 clearBtnText.classList.remove('text-red-400');
                 clearBtnText.classList.add('text-green-400');
                 
