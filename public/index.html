@@ -729,11 +729,25 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    
                     const data = await response.json();
+
+                    if (!response.ok) {
+                        // サーバーから返されたエラー詳細を抽出して投げる
+                        let errMsg = `HTTP ${response.status}`;
+                        if (data.details && data.details.error && data.details.error.message) {
+                            errMsg += `: ${data.details.error.message}`;
+                        } else if (data.error) {
+                            errMsg += `: ${typeof data.error === 'string' ? data.error : JSON.stringify(data.error)}`;
+                        }
+                        throw new Error(errMsg);
+                    }
+                    
                     if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
                         return JSON.parse(data.candidates[0].content.parts[0].text);
-                    } else throw new Error("No content");
+                    } else {
+                        throw new Error("No content in response");
+                    }
                 } catch (e) {
                     if (i === 4) throw e;
                     await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
