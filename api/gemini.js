@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   // 最新のモデル名を使用（利用可能なものに変更）
-  const modelName = "gemini-2.5-flash-preview-09-2025"; 
+  const modelName = "gemini-1.5-flash"; 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
   if (req.method !== 'POST') {
@@ -35,12 +35,16 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
+    // エラー時の詳細な情報を返すように修正した箇所
     if (!response.ok) {
-      return res.status(response.status).json(data);
+      console.error("Gemini API Error:", data);
+      return res.status(response.status).json({ error: 'Gemini API Request Failed', details: data });
     }
 
     res.status(200).json(data);
   } catch (error) {
+    // サーバー内部エラー時の詳細な情報を返すように修正した箇所
+    console.error("Server Error:", error);
     res.status(500).json({ error: 'Server Error', details: error.message });
   }
 }
