@@ -1,7 +1,10 @@
 export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
-  // 最新のモデル名を使用（利用可能なものに変更）
-  const modelName = "gemini-1.5-flash"; 
+  
+  // 404エラー対策: "-latest" を付与したモデル名に変更します
+  // （もしこれでも動かない場合は "gemini-pro" や "gemini-1.5-flash-001" に変更してみてください）
+  const modelName = "gemini-1.5-flash-latest"; 
+  
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
   if (req.method !== 'POST') {
