@@ -3,7 +3,7 @@ export default async function handler(req, res) {
   
   // 404エラー対策: "-latest" を付与したモデル名に変更します
   // （もしこれでも動かない場合は "gemini-pro" や "gemini-1.5-flash-001" に変更してみてください）
-  const modelName = "gemini-1.5-flash-latest"; 
+  const modelName = "gemini-2.5-flash-preview-09-2025"; 
   
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
