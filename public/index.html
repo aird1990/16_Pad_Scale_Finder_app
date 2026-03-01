@@ -319,7 +319,7 @@
         }
         
         .btn-blue { background-color: #2563eb; border-color: #1d4ed8; }
-        .btn-blue:hover { background-color: #1d4ed8; }
+        .btn-blue:active { background-color: #1d4ed8; }
 
         .nav-tabs {
             display: grid;
@@ -423,7 +423,6 @@
 
         .hidden { display: none !important; }
 
-        /* Modal */
         #ai-modal {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -441,7 +440,8 @@
             .btn { padding: 14px; font-size: 12px; }
             .seq-key { width: 80px; font-size: 12px; }
             .seq-row { height: 40px; }
-            .seq-cell { flex: 1; width: auto; }
+            /* ★32ステップ対応：マスが潰れすぎないように最低幅を確保 */
+            .seq-cell { flex: 1; width: auto; min-width: 20px; }
             .seq-grid { flex-grow: 1; width: 100%; }
         }
     </style>
@@ -454,8 +454,9 @@
             <div class="status-area">
                 <div class="flex items-center gap-2 mb-1">
                     <span class="label-small hidden md:inline">NAVIGATOR</span>
-                    <button id="sound-toggle" class="btn text-[10px] font-bold px-3 py-1 flex items-center gap-1 transition-all duration-300">
-                        <span id="sound-icon">🔈</span> <span class="hidden xs:inline">SOUND</span> OFF
+                    <!-- ★デフォルトON用のクラス active-green を追加 -->
+                    <button id="sound-toggle" class="btn text-[10px] font-bold px-3 py-1 flex items-center gap-1 transition-all duration-300 active-green">
+                        <span id="sound-icon">🔊</span> <span class="hidden xs:inline">SOUND</span> ON
                     </button>
                     <button id="rec-btn" class="btn text-[10px] font-bold px-3 py-1 flex items-center gap-1 transition-all duration-300">
                         <span class="w-2 h-2 rounded-full bg-red-600"></span> REC
@@ -477,7 +478,7 @@
         <div id="view-sequencer" class="view-panel hidden">
             <!-- View Mode Toggle & Clear -->
             <div class="flex justify-between items-center mb-2 flex-shrink-0">
-                <div class="label-small text-gray-500">SEQ EDITOR</div>
+                <div class="label-small text-gray-500">SEQ EDITOR (8 BARS)</div>
                 <div class="flex gap-2">
                     <button id="clear-seq-btn" class="group flex items-center gap-1 text-[9px] px-2 py-1 rounded border border-[#333] hover:border-red-500 transition-all min-w-[60px] justify-center bg-[#222]">
                         <span id="clear-btn-text" class="text-gray-400 group-hover:text-red-400 font-bold uppercase">🗑️ CLEAR</span>
@@ -508,7 +509,7 @@
                     </select>
                 </div>
                 <div class="mt-4 text-xs text-gray-500">
-                    <p>Version: 1.1 Mobile Optimized</p>
+                    <p>Version: 1.2 (8 Bars / Auto Sound On)</p>
                 </div>
             </div>
         </div>
@@ -585,8 +586,7 @@
                 <button id="ai-submit" class="ai-btn flex-grow">生成開始</button>
                 <button id="ai-close" class="btn flex-grow">閉じる</button>
             </div>
-            <!-- ★エラーが赤文字でハッキリ出るように変更 -->
-            <p id="ai-status" class="text-[10px] text-red-400 mt-4 font-bold text-center min-h-[15px]"></p>
+            <p id="ai-status" class="text-[10px] text-gray-500 mt-4 font-bold text-center min-h-[15px]"></p>
         </div>
     </div>
 
@@ -621,7 +621,8 @@
         // Sequencer view mode controls
         const btnSeqScale = document.getElementById('seq-mode-scale');
         const btnSeqChrom = document.getElementById('seq-mode-chromatic');
-        let sequencerViewMode = 'scale'; // 'scale' or 'chromatic'
+        
+        let sequencerViewMode = 'scale';
 
         let currentLang = 'ja';
 
@@ -672,9 +673,9 @@
             }
         };
 
-        let audioCtx, masterGain, isPlaying = false, isSoundOn = false, isRecording = false, currentStep = 0, timer, sequencerData = {};
-        let aiMode = 'scale';
-
+        // ★デフォルトでサウンドON
+        let audioCtx, masterGain, isPlaying = false, isSoundOn = true, isRecording = false, currentStep = 0, timer, sequencerData = {};
+        
         const MidiEncoder = {
             numToVarLen(num) {
                 let bytes = [];
@@ -719,9 +720,8 @@
             }
         };
 
-        // ★★★ エラー詳細を画面に出すように強化されたAI呼び出し関数 ★★★
         async function callGemini(prompt, systemPrompt, schema) {
-            const url = `/api/gemini`; // 16 Pad Scale Finder は api/gemini
+            const url = `/api/gemini`;
             const payload = {
                 contents: [{ role: "user", parts: [{ text: prompt }] }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -746,7 +746,7 @@
                     if (!response.ok) {
                         let errMsg = `HTTP ${response.status} エラー`;
                         if (response.status === 404 && !data) {
-                            errMsg = `エラー404: /api/gemini.js ファイルが見つかりません。GitHubのファイル名を確認してください。`;
+                            errMsg = `エラー404: /api/gemini.js ファイルが見つかりません。`;
                         } else if (data && data.error && data.error.message) {
                             errMsg = `Google API エラー: ${data.error.message}`;
                         } else if (data && data.error) {
@@ -854,9 +854,10 @@
                 const grid = document.createElement('div');
                 grid.className = 'seq-grid';
                 grid.dataset.padIndex = realIdx;
-                if (!sequencerData[realIdx]) sequencerData[realIdx] = new Array(16).fill(false);
+                // ★ 8小節（32ステップ）に拡張
+                if (!sequencerData[realIdx]) sequencerData[realIdx] = new Array(32).fill(false);
 
-                for (let s = 0; s < 16; s++) {
+                for (let s = 0; s < 32; s++) {
                     const cell = document.createElement('div');
                     cell.className = `seq-cell ${sequencerData[realIdx][s] ? 'active' : ''} ${Math.floor(s/4)%2===1?'measure-alt':''}`;
                     cell.dataset.stepIndex = s;
@@ -885,17 +886,8 @@
             }
         }
         
-        btnSeqScale.onclick = () => {
-            sequencerViewMode = 'scale';
-            updateSeqModeUI();
-            renderSequencer();
-        };
-        
-        btnSeqChrom.onclick = () => {
-            sequencerViewMode = 'chromatic';
-            updateSeqModeUI();
-            renderSequencer();
-        };
+        btnSeqScale.onclick = () => { sequencerViewMode = 'scale'; updateSeqModeUI(); renderSequencer(); };
+        btnSeqChrom.onclick = () => { sequencerViewMode = 'chromatic'; updateSeqModeUI(); renderSequencer(); };
 
         function runCycle() {
             if (!isPlaying) return;
@@ -904,7 +896,8 @@
             
             const cells = seqContainer.querySelectorAll('.seq-cell');
             cells.forEach(cell => {
-                if (parseInt(cell.dataset.stepIndex) === (currentStep % 16)) {
+                // ★ 32ステップループ
+                if (parseInt(cell.dataset.stepIndex) === (currentStep % 32)) {
                     cell.classList.add('current');
                 } else {
                     cell.classList.remove('current');
@@ -912,7 +905,7 @@
             });
 
             if (modeSelect.value === 'scale') {
-                const stepIdx = currentStep % 16;
+                const stepIdx = currentStep % 32;
                 const hits = [];
                 Object.keys(sequencerData).forEach(idx => {
                     if (sequencerData[idx][stepIdx]) {
@@ -921,7 +914,7 @@
                     }
                 });
                 updateUI(hits);
-                currentStep = (currentStep + 1) % 16;
+                currentStep = (currentStep + 1) % 32;
             } else {
                 const curKey = keyTypeSelect.value;
                 const curSub = subSelect.value;
@@ -969,9 +962,10 @@
                         updateUI(hits);
 
                         if (isRecording) {
-                            const startStep = stepIdx % 16;
+                            // ★ 32ステップシーケンサーの現在の再生位置に記録
+                            const startStep = currentStep % 32;
                             hits.forEach(padIdx => {
-                                if (!sequencerData[padIdx]) sequencerData[padIdx] = new Array(16).fill(false);
+                                if (!sequencerData[padIdx]) sequencerData[padIdx] = new Array(32).fill(false);
                                 sequencerData[padIdx][startStep] = true;
                             });
                             if (!document.getElementById('view-sequencer').classList.contains('hidden')) renderSequencer();
@@ -979,7 +973,7 @@
                     }
                     currentStep++;
                 } else {
-                    currentStep = (currentStep + 1) % 16;
+                    currentStep = (currentStep + 1) % 32;
                 }
             }
             timer = setTimeout(runCycle, stepMs);
@@ -995,7 +989,8 @@
             ];
 
             let absoluteEvents = [];
-            for (let s = 0; s < 16; s++) {
+            // ★ MIDIエクスポートも32ステップに対応
+            for (let s = 0; s < 32; s++) {
                 const startTime = s * ticksPerBeat;
                 const endTime = startTime + Math.floor(ticksPerBeat * 0.8);
 
@@ -1029,7 +1024,7 @@
         async function handleAI() {
             const prompt = aiInput.value;
             aiStatus.textContent = "考え中...";
-            aiStatus.style.color = "inherit"; // 初期化時はデフォルト色
+            aiStatus.style.color = "inherit";
             aiSubmit.disabled = true;
             try {
                 if (aiMode === 'scale') {
@@ -1059,7 +1054,7 @@
             } catch (e) { 
                 console.error(e);
                 aiStatus.textContent = e.message; 
-                aiStatus.style.color = "#f87171"; // エラー時は赤文字
+                aiStatus.style.color = "#f87171";
             } finally { aiSubmit.disabled = false; updateUI(); }
         }
 
@@ -1116,7 +1111,6 @@
         keyTypeSelect.onchange = updateSubOptions;
         rootSelect.onchange = () => { currentStep = 0; updateUI(); renderSequencer(); };
         
-        // 言語切り替え時にUIを更新する関数
         function updateUILanguage() {
             if (currentLang === 'ja') {
                 aiScaleBtn.innerHTML = '✨ AI スケール';
@@ -1214,7 +1208,7 @@
             updateUI();
         });
 
-        // 初期化時にUI言語とオプションを更新
+        // 初期化処理
         updateUILanguage();
         updateSubOptions();
     </script>
