@@ -267,6 +267,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 6px;
+            padding-bottom: 4px; /* ★スクロールバー発生防止マージン */
         }
 
         .btn {
@@ -285,9 +286,16 @@
             justify-content: center;
             user-select: none;
             touch-action: manipulation;
+            /* ★レイアウト崩れ防止策 */
+            transition: transform 0.1s, background-color 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .btn:active { background-color: #444; transform: translateY(1px); }
+        .btn:hover { background-color: #444; }
+        /* ★下への移動（translateY）を廃止し、縮小（scale）に変更 */
+        .btn:active { background-color: #555; transform: scale(0.97); }
 
         #sound-toggle.active-green {
             background-color: var(--accent-green-bright) !important;
@@ -311,7 +319,7 @@
         }
         
         .btn-blue { background-color: #2563eb; border-color: #1d4ed8; }
-        .btn-blue:active { background-color: #1d4ed8; }
+        .btn-blue:hover { background-color: #1d4ed8; }
 
         .nav-tabs {
             display: grid;
@@ -577,7 +585,8 @@
                 <button id="ai-submit" class="ai-btn flex-grow">生成開始</button>
                 <button id="ai-close" class="btn flex-grow">閉じる</button>
             </div>
-            <p id="ai-status" class="text-[10px] text-gray-500 mt-4 italic text-center min-h-[15px]"></p>
+            <!-- ★エラーが赤文字でハッキリ出るように変更 -->
+            <p id="ai-status" class="text-[10px] text-red-400 mt-4 font-bold text-center min-h-[15px]"></p>
         </div>
     </div>
 
@@ -710,8 +719,9 @@
             }
         };
 
+        // ★★★ エラー詳細を画面に出すように強化されたAI呼び出し関数 ★★★
         async function callGemini(prompt, systemPrompt, schema) {
-            const url = `/api/gemini`;
+            const url = `/api/gemini`; // 16 Pad Scale Finder は api/gemini
             const payload = {
                 contents: [{ role: "user", parts: [{ text: prompt }] }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -730,23 +740,27 @@
                         body: JSON.stringify(payload)
                     });
                     
-                    const data = await response.json();
+                    let data = null;
+                    try { data = await response.json(); } catch(e) {}
 
                     if (!response.ok) {
-                        // サーバーから返されたエラー詳細を抽出して投げる
-                        let errMsg = `HTTP ${response.status}`;
-                        if (data.details && data.details.error && data.details.error.message) {
-                            errMsg += `: ${data.details.error.message}`;
-                        } else if (data.error) {
-                            errMsg += `: ${typeof data.error === 'string' ? data.error : JSON.stringify(data.error)}`;
+                        let errMsg = `HTTP ${response.status} エラー`;
+                        if (response.status === 404 && !data) {
+                            errMsg = `エラー404: /api/gemini.js ファイルが見つかりません。GitHubのファイル名を確認してください。`;
+                        } else if (data && data.error && data.error.message) {
+                            errMsg = `Google API エラー: ${data.error.message}`;
+                        } else if (data && data.error) {
+                            errMsg = `API エラー: ${JSON.stringify(data.error)}`;
+                        } else if (data && data.details) {
+                            errMsg = `Vercel エラー: ${data.details}`;
                         }
                         throw new Error(errMsg);
                     }
                     
-                    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+                    if (data && data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
                         return JSON.parse(data.candidates[0].content.parts[0].text);
                     } else {
-                        throw new Error("No content in response");
+                        throw new Error("応答データが空です");
                     }
                 } catch (e) {
                     if (i === 4) throw e;
@@ -1007,14 +1021,15 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'pad_finder.mid'; // ★ 修正：タイムスタンプを削除してファイル名を固定
+            a.download = 'pad_finder.mid';
             a.click();
             URL.revokeObjectURL(url);
         }
 
         async function handleAI() {
             const prompt = aiInput.value;
-            aiStatus.textContent = "Generating...";
+            aiStatus.textContent = "考え中...";
+            aiStatus.style.color = "inherit"; // 初期化時はデフォルト色
             aiSubmit.disabled = true;
             try {
                 if (aiMode === 'scale') {
@@ -1043,7 +1058,8 @@
                 aiModal.classList.add('hidden');
             } catch (e) { 
                 console.error(e);
-                aiStatus.textContent = "Failed: " + e.message; 
+                aiStatus.textContent = e.message; 
+                aiStatus.style.color = "#f87171"; // エラー時は赤文字
             } finally { aiSubmit.disabled = false; updateUI(); }
         }
 
