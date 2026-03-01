@@ -1,53 +1,54 @@
-export default async function handler(req, res) {
-  const apiKey = process.env.GEMINI_API_KEY;
+// Vercel Serverless Function (CommonJS) - Final Clean Version
+module.exports = async (req, res) => {
+  // CORS設定（ブラウザからのアクセス許可）
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+  // プリフライトリクエストの処理
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // APIキーの取得と不要な記号（空白や引用符）の自動削除（ロック回避のための超重要処理）
+  const apiKey = (process.env.GEMINI_API_KEY || "").replace(/['"]/g, '').trim();
   
-  // 404エラー対策: "-latest" を付与したモデル名に変更します
-  // （もしこれでも動かない場合は "gemini-pro" や "gemini-1.5-flash-001" に変更してみてください）
-  const modelName = "gemini-2.5-flash-preview-09-2025"; 
-  
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'API Key is missing in Vercel.' });
+  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  if (!apiKey) {
-    return res.status(500).json({ error: 'API Key is missing in Vercel settings' });
-  }
-
   try {
     const { contents, systemInstruction, generationConfig } = req.body;
+    
+    // 現在最も高速で、すべてのアカウントで安定して使える最新モデルを指定
+    const modelName = "gemini-1.5-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-    // Google Gemini API の期待する厳密な構造に再構成
-    const payload = {
-      contents: contents,
-      generationConfig: generationConfig || {}
-    };
-
-    if (systemInstruction) {
-      payload.systemInstruction = systemInstruction;
-    }
+    // 送信データの組み立て
+    const payload = { contents };
+    if (systemInstruction) payload.systemInstruction = systemInstruction;
+    if (generationConfig) payload.generationConfig = generationConfig;
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
     const data = await response.json();
 
-    // エラー時の詳細な情報を返すように修正した箇所
-    if (!response.ok) {
-      console.error("Gemini API Error:", data);
-      return res.status(response.status).json({ error: 'Gemini API Request Failed', details: data });
+    if (response.ok) {
+      return res.status(200).json(data);
+    } else {
+      console.error("[Gemini API Error]", JSON.stringify(data));
+      return res.status(response.status).json(data);
     }
 
-    res.status(200).json(data);
   } catch (error) {
-    // サーバー内部エラー時の詳細な情報を返すように修正した箇所
-    console.error("Server Error:", error);
+    console.error("[Server Error]", error);
     res.status(500).json({ error: 'Server Error', details: error.message });
   }
-}
+};
