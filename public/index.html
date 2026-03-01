@@ -495,7 +495,7 @@
                 <div class="control-item">
                     <label class="label-small">Language / 言語設定</label>
                     <select id="lang-select">
-                        <option value="ja">日本語 (Japanese)</option>
+                        <option value="ja" selected>日本語 (Japanese)</option>
                         <option value="en">English</option>
                     </select>
                 </div>
@@ -507,8 +507,8 @@
 
         <!-- AI Integration Area -->
         <div class="ai-controls">
-            <button id="ai-scale-btn" class="ai-btn">✨ AI Scale</button>
-            <button id="ai-prog-btn" class="ai-btn">✨ AI Prog</button>
+            <button id="ai-scale-btn" class="ai-btn">✨ AI スケール</button>
+            <button id="ai-prog-btn" class="ai-btn">✨ AI コード進行</button>
         </div>
 
         <!-- Lower Controls -->
@@ -547,8 +547,8 @@
 
             <div class="controls-row">
                 <select id="mode-selector">
-                    <option value="scale">Mode: Scale</option>
-                    <option value="progression">Mode: Prog</option>
+                    <option value="scale">Mode: スケール</option>
+                    <option value="progression">Mode: コード進行</option>
                 </select>
                 <select id="sub-selector" class="text-ellipsis overflow-hidden"></select>
             </div>
@@ -1099,7 +1099,27 @@
         modeSelect.onchange = updateSubOptions;
         keyTypeSelect.onchange = updateSubOptions;
         rootSelect.onchange = () => { currentStep = 0; updateUI(); renderSequencer(); };
-        langSelect.onchange = (e) => { currentLang = e.target.value; updateSubOptions(); };
+        
+        // 言語切り替え時にUIを更新する関数
+        function updateUILanguage() {
+            if (currentLang === 'ja') {
+                aiScaleBtn.innerHTML = '✨ AI スケール';
+                aiProgBtn.innerHTML = '✨ AI コード進行';
+                modeSelect.options[0].text = 'Mode: スケール';
+                modeSelect.options[1].text = 'Mode: コード進行';
+            } else {
+                aiScaleBtn.innerHTML = '✨ AI Scale';
+                aiProgBtn.innerHTML = '✨ AI Prog';
+                modeSelect.options[0].text = 'Mode: Scale';
+                modeSelect.options[1].text = 'Mode: Prog';
+            }
+        }
+
+        langSelect.onchange = (e) => { 
+            currentLang = e.target.value; 
+            updateUILanguage();
+            updateSubOptions(); 
+        };
 
         function updateSubOptions() {
             const mode = modeSelect.value;
@@ -1178,6 +1198,8 @@
             updateUI();
         });
 
+        // 初期化時にUI言語とオプションを更新
+        updateUILanguage();
         updateSubOptions();
     </script>
 </body>
